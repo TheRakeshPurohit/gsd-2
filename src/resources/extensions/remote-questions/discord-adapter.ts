@@ -20,11 +20,13 @@ const DISCORD_API = "https://discord.com/api/v10";
 export class DiscordAdapter implements ChannelAdapter {
   readonly name = "discord";
   private botUserId: string | null = null;
+  private readonly token: string;
+  private readonly channelId: string;
 
-  constructor(
-    private readonly token: string,
-    private readonly channelId: string,
-  ) {}
+  constructor(token: string, channelId: string) {
+    this.token = token;
+    this.channelId = channelId;
+  }
 
   async validate(): Promise<void> {
     const res = await this.discordApi("GET", "/users/@me");

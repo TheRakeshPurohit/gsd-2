@@ -20,11 +20,13 @@ const SLACK_API = "https://slack.com/api";
 export class SlackAdapter implements ChannelAdapter {
   readonly name = "slack";
   private botUserId: string | null = null;
+  private readonly token: string;
+  private readonly channelId: string;
 
-  constructor(
-    private readonly token: string,
-    private readonly channelId: string,
-  ) {}
+  constructor(token: string, channelId: string) {
+    this.token = token;
+    this.channelId = channelId;
+  }
 
   async validate(): Promise<void> {
     const res = await this.slackApi("auth.test", {});
