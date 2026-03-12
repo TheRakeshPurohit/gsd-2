@@ -8,6 +8,13 @@ custom_instructions: []
 models: {}
 skill_discovery:
 auto_supervisor: {}
+git:
+  auto_push:
+  push_branches:
+  remote:
+  snapshots:
+  pre_merge_check:
+  commit_type:
 ---
 
 # GSD Skill Preferences

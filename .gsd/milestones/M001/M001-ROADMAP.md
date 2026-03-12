@@ -55,7 +55,7 @@ This milestone is complete only when all are true:
 - [x] **S01: GitService core implementation** `risk:high` `depends:[]`
   > After this: `git-service.ts` exists with commit, autoCommit, ensureSliceBranch, switchToMain, mergeSliceToMain, inferCommitType, smart staging — all passing unit tests in temp git repos.
 
-- [ ] **S02: Wire GitService into codebase** `risk:high` `depends:[S01]`
+- [x] **S02: Wire GitService into codebase** `risk:high` `depends:[S01]`
   > After this: auto.ts and worktree.ts delegate to GitService. Git preferences schema added to preferences.ts. `npm run build` passes. Existing worktree tests still pass.
 
 - [ ] **S03: Bug fixes and doc corrections** `risk:medium` `depends:[S02]`

@@ -40,6 +40,14 @@ Full documentation for `~/.gsd/preferences.md` (global) and `.gsd/preferences.md
   - `idle_timeout_minutes`: minutes of inactivity before the supervisor intervenes (default: 10).
   - `hard_timeout_minutes`: minutes before the supervisor forces termination (default: 30).
 
+- `git`: configures GSD's git behavior. All fields are optional — omit any to use defaults. Keys:
+  - `auto_push`: boolean — automatically push commits to the remote after committing. Default: `false`.
+  - `push_branches`: boolean — push newly created slice branches to the remote. Default: `false`.
+  - `remote`: string — git remote name to push to. Default: `"origin"`.
+  - `snapshots`: boolean — create snapshot commits (WIP saves) during long-running tasks. Default: `false`.
+  - `pre_merge_check`: boolean or `"auto"` — run pre-merge checks before merging a slice branch. `true` always runs, `false` never runs, `"auto"` runs when CI is detected. Default: `false`.
+  - `commit_type`: string — override the conventional commit type prefix. Must be one of: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`, `build`, `style`. Default: inferred from diff content.
+
 ---
 
 ## Best Practices
@@ -101,3 +109,22 @@ skill_rules:
       - find-skills
 ---
 ```
+
+---
+
+## Git Preferences Example
+
+```yaml
+---
+version: 1
+git:
+  auto_push: true
+  push_branches: true
+  remote: origin
+  snapshots: true
+  pre_merge_check: auto
+  commit_type: feat
+---
+```
+
+All git fields are optional. Omit any field to use the default behavior. Project-level preferences override global preferences on a per-field basis.

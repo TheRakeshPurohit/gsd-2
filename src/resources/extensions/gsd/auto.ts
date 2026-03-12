@@ -62,11 +62,12 @@ import {
   ensureSliceBranch,
   getCurrentBranch,
   getMainBranch,
-  getSliceBranchName,
   parseSliceBranch,
   switchToMain,
   mergeSliceToMain,
 } from "./worktree.ts";
+import { GitServiceImpl } from "./git-service.ts";
+import type { GitPreferences } from "./git-service.ts";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { makeUI, GLYPH, INDENT } from "../shared/ui.js";
 import { showNextAction } from "../shared/next-action-ui.js";
@@ -124,6 +125,7 @@ let stepMode = false;
 let verbose = false;
 let cmdCtx: ExtensionCommandContext | null = null;
 let basePath = "";
+let gitService: GitServiceImpl | null = null;
 
 /** Track total dispatches per unit to detect stuck loops (catches A→B→A→B patterns) */
 const unitDispatchCount = new Map<string, number>();
@@ -387,6 +389,9 @@ export async function startAuto(
       });
     } catch { /* nothing to commit */ }
   }
+
+  // Initialize GitServiceImpl — basePath is set and git repo confirmed
+  gitService = new GitServiceImpl(basePath, loadEffectiveGSDPreferences()?.preferences?.git ?? {});
 
   // Check for crash from previous session
   const crashLock = readCrashLock(base);

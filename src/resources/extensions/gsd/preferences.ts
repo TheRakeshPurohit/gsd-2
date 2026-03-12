@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import type { GitPreferences } from "./git-service.ts";
 
 const GLOBAL_PREFERENCES_PATH = join(homedir(), ".gsd", "preferences.md");
 const LEGACY_GLOBAL_PREFERENCES_PATH = join(homedir(), ".pi", "agent", "gsd-preferences.md");
@@ -51,6 +52,7 @@ export interface GSDPreferences {
   uat_dispatch?: boolean;
   budget_ceiling?: number;
   remote_questions?: RemoteQuestionsConfig;
+  git?: GitPreferences;
 }
 
 export interface LoadedGSDPreferences {
@@ -511,6 +513,9 @@ function mergePreferences(base: GSDPreferences, override: GSDPreferences): GSDPr
     remote_questions: override.remote_questions
       ? { ...(base.remote_questions ?? {}), ...override.remote_questions }
       : base.remote_questions,
+    git: (base.git || override.git)
+      ? { ...(base.git ?? {}), ...(override.git ?? {}) }
+      : undefined,
   };
 }
 
@@ -591,6 +596,50 @@ function validatePreferences(preferences: GSDPreferences): {
       validated.budget_ceiling = Number(raw);
     } else {
       errors.push("budget_ceiling must be a finite number");
+    }
+  }
+
+  // ─── Git Preferences ───────────────────────────────────────────────────
+  if (preferences.git && typeof preferences.git === "object") {
+    const git: Record<string, unknown> = {};
+    const g = preferences.git as Record<string, unknown>;
+
+    if (g.auto_push !== undefined) {
+      if (typeof g.auto_push === "boolean") git.auto_push = g.auto_push;
+      else errors.push("git.auto_push must be a boolean");
+    }
+    if (g.push_branches !== undefined) {
+      if (typeof g.push_branches === "boolean") git.push_branches = g.push_branches;
+      else errors.push("git.push_branches must be a boolean");
+    }
+    if (g.remote !== undefined) {
+      if (typeof g.remote === "string" && g.remote.trim() !== "") git.remote = g.remote.trim();
+      else errors.push("git.remote must be a non-empty string");
+    }
+    if (g.snapshots !== undefined) {
+      if (typeof g.snapshots === "boolean") git.snapshots = g.snapshots;
+      else errors.push("git.snapshots must be a boolean");
+    }
+    if (g.pre_merge_check !== undefined) {
+      if (typeof g.pre_merge_check === "boolean" || g.pre_merge_check === "auto") {
+        git.pre_merge_check = g.pre_merge_check;
+      } else {
+        errors.push('git.pre_merge_check must be a boolean or "auto"');
+      }
+    }
+    if (g.commit_type !== undefined) {
+      const validCommitTypes = new Set([
+        "feat", "fix", "refactor", "docs", "test", "chore", "perf", "ci", "build", "style",
+      ]);
+      if (typeof g.commit_type === "string" && validCommitTypes.has(g.commit_type)) {
+        git.commit_type = g.commit_type;
+      } else {
+        errors.push(`git.commit_type must be one of: feat, fix, refactor, docs, test, chore, perf, ci, build, style`);
+      }
+    }
+
+    if (Object.keys(git).length > 0) {
+      validated.git = git as GitPreferences;
     }
   }
 
