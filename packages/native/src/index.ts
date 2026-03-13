@@ -7,6 +7,11 @@
  * - ps: cross-platform process tree management
  * - glob: gitignore-respecting filesystem discovery with scan caching
  * - highlight: syntect-based syntax highlighting
+ * - html: HTML to Markdown conversion
+ * - text: ANSI-aware text measurement and slicing
+ * - fd: fuzzy file path discovery
+ * - image: decode, encode, and resize images
+ for autocomplete and @-mention resolution
  */
 
 export {
@@ -54,3 +59,27 @@ export type {
   AstFindMatch, AstFindOptions, AstFindResult,
   AstReplaceChange, AstReplaceFileChange, AstReplaceOptions, AstReplaceResult,
 } from "./ast/index.js";
+
+export { htmlToMarkdown } from "./html/index.js";
+export type { HtmlToMarkdownOptions } from "./html/index.js";
+
+export {
+  wrapTextWithAnsi,
+  truncateToWidth,
+  sliceWithWidth,
+  extractSegments,
+  sanitizeText,
+  visibleWidth,
+  EllipsisKind,
+} from "./text/index.js";
+export type { SliceResult, ExtractSegmentsResult } from "./text/index.js";
+
+export { fuzzyFind } from "./fd/index.js";
+export type {
+  FuzzyFindMatch,
+  FuzzyFindOptions,
+  FuzzyFindResult,
+} from "./fd/index.js";
+
+export { parseImage, ImageFormat, SamplingFilter } from "./image/index.js";
+export type { NativeImageHandle } from "./image/index.js";
