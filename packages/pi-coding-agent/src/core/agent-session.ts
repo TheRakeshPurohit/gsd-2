@@ -2188,7 +2188,14 @@ export class AgentSession {
 			? this._baseToolsOverride
 			: createAllTools(this._cwd, {
 					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix },
+					bash: {
+						commandPrefix: shellCommandPrefix,
+						interceptor: {
+							enabled: this.settingsManager.getBashInterceptorEnabled(),
+							rules: this.settingsManager.getBashInterceptorRules(),
+						},
+						availableToolNames: () => this.getActiveToolNames(),
+					},
 				});
 
 		this._baseToolRegistry = new Map(Object.entries(baseTools).map(([name, tool]) => [name, tool as AgentTool]));

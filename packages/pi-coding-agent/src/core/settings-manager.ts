@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.js";
+import type { BashInterceptorRule } from "./tools/bash-interceptor.js";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -37,6 +38,11 @@ export interface ThinkingBudgetsSettings {
 	low?: number;
 	medium?: number;
 	high?: number;
+}
+
+export interface BashInterceptorSettings {
+	enabled?: boolean; // default: true
+	rules?: BashInterceptorRule[]; // override default rules
 }
 
 export interface MarkdownSettings {
@@ -93,6 +99,7 @@ export interface Settings {
 	autocompleteMaxVisible?: number; // Max visible items in autocomplete dropdown (default: 5)
 	showHardwareCursor?: boolean; // Show terminal cursor while still positioning it for IME
 	markdown?: MarkdownSettings;
+	bashInterceptor?: BashInterceptorSettings;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -938,5 +945,13 @@ export class SettingsManager {
 
 	getCodeBlockIndent(): string {
 		return this.settings.markdown?.codeBlockIndent ?? "  ";
+	}
+
+	getBashInterceptorEnabled(): boolean {
+		return this.settings.bashInterceptor?.enabled ?? true;
+	}
+
+	getBashInterceptorRules(): BashInterceptorRule[] | undefined {
+		return this.settings.bashInterceptor?.rules;
 	}
 }
