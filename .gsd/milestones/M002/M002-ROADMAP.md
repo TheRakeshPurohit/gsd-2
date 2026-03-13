@@ -61,7 +61,7 @@ This milestone is complete only when all are true:
 - [x] **S01: Module decomposition and shared evaluate utilities** `risk:high` `depends:[]`
   > After this: all 43 existing browser tools work identically with the new module structure; shared browser-side utilities (cssPath, simpleHash, isVisible, isEnabled, inferRole, accessibleName) are injected once via addInitScript and used by buildRefSnapshot and resolveRefTarget — verified by build success and spot-check against a real page.
 
-- [ ] **S02: Action pipeline performance** `risk:medium` `depends:[S01]`
+- [x] **S02: Action pipeline performance** `risk:medium` `depends:[S01]`
   > After this: captureCompactPageState and postActionSummary are consolidated into fewer evaluate calls per action; settleAfterActionAdaptive short-circuits on zero-mutation actions; low-signal actions (scroll, hover, Tab) skip body text capture — verified by build success and behavioral spot-check.
 
 - [ ] **S03: Screenshot pipeline** `risk:low` `depends:[S01]`

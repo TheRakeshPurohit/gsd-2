@@ -163,7 +163,7 @@ export interface AdaptiveSettleOptions {
 export interface AdaptiveSettleDetails {
 	settleMode: "adaptive";
 	settleMs: number;
-	settleReason: "dom_quiet" | "url_changed_then_quiet" | "timeout_fallback";
+	settleReason: "dom_quiet" | "url_changed_then_quiet" | "timeout_fallback" | "zero_mutation_shortcut";
 	settlePolls: number;
 }
 
@@ -389,7 +389,6 @@ export interface ToolDeps {
 	formatAssertionText: (result: ReturnType<typeof import("./core.js").evaluateAssertionChecks>) => string;
 	formatDiffText: (diff: ReturnType<typeof import("./core.js").diffCompactStates>) => string;
 	getUrlHash: (url: string) => string;
-	countOpenDialogs: (target: Page | Frame) => Promise<number>;
 	captureClickTargetState: (target: Page | Frame, selector: string) => Promise<ClickTargetStateSnapshot>;
 	readInputLikeValue: (target: Page | Frame, selector?: string) => Promise<string | null>;
 	firstErrorLine: (err: unknown) => string;

@@ -37,9 +37,9 @@ export function registerNavigationTools(pi: ExtensionAPI, deps: ToolDeps): void 
 				const url = p.url();
 				const viewport = p.viewportSize();
 				const vpText = viewport ? `${viewport.width}x${viewport.height}` : "unknown";
-				const summary = await deps.postActionSummary(p);
-				const jsErrors = deps.getRecentErrors(p.url());
 				const afterState = await deps.captureCompactPageState(p, { includeBodyText: true });
+				const summary = deps.formatCompactStateSummary(afterState);
+				const jsErrors = deps.getRecentErrors(p.url());
 				const diff = diffCompactStates(beforeState, afterState);
 				setLastActionBeforeState(beforeState);
 				setLastActionAfterState(afterState);

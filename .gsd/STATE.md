@@ -1,9 +1,9 @@
 # GSD State
 
 **Active Milestone:** M002 — Browser Tools Performance & Intelligence
-**Active Slice:** S02 — Action pipeline performance
+**Active Slice:** S03 — Screenshot pipeline
 **Phase:** planning
-**Requirements Status:** 10 active · 12 validated · 3 deferred · 3 out of scope
+**Requirements Status:** 7 active · 15 validated · 3 deferred · 3 out of scope
 
 ## Milestone Registry
 - ✅ **M001:** Proactive Secret Management
@@ -16,4 +16,4 @@
 - None
 
 ## Next Action
-Plan slice S02 (Action pipeline performance).
+Plan slice S03 (Screenshot pipeline).

@@ -38,7 +38,6 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				actionId = deps.beginTrackedAction("browser_click", params, beforeState.url).id;
 				const beforeUrl = p.url();
 				const beforeHash = deps.getUrlHash(beforeUrl);
-				const beforeDialogCount = await deps.countOpenDialogs(target);
 				const beforeTargetState = params.selector
 					? await deps.captureClickTargetState(target, params.selector)
 					: null;
@@ -85,9 +84,9 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const url = p.url();
+				const afterState = await deps.captureCompactPageState(p, { selectors: params.selector ? [params.selector] : [], includeBodyText: true, target });
+				const url = afterState.url;
 				const hash = deps.getUrlHash(url);
-				const afterDialogCount = await deps.countOpenDialogs(target);
 				const afterTargetState = params.selector
 					? await deps.captureClickTargetState(target, params.selector)
 					: null;
@@ -103,14 +102,13 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 						{ name: "url_changed", passed: url !== beforeUrl, value: url, expected: `!= ${beforeUrl}` },
 						{ name: "hash_changed", passed: hash !== beforeHash, value: hash, expected: `!= ${beforeHash}` },
 						{ name: "target_state_changed", passed: targetStateChanged, value: afterTargetState, expected: beforeTargetState },
-						{ name: "dialog_open", passed: afterDialogCount > beforeDialogCount, value: afterDialogCount, expected: `> ${beforeDialogCount}` },
+						{ name: "dialog_open", passed: afterState.dialog.count > beforeState!.dialog.count, value: afterState.dialog.count, expected: `> ${beforeState!.dialog.count}` },
 					],
 					"Try a more specific selector or click a clearly interactive element."
 				);
 				const clickTarget = params.selector ?? `(${params.x}, ${params.y})`;
-				const summary = await deps.postActionSummary(p, target);
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
-				const afterState = await deps.captureCompactPageState(p, { selectors: params.selector ? [params.selector] : [], includeBodyText: true, target });
 				const diff = diffCompactStates(beforeState!, afterState);
 				setLastActionBeforeState(beforeState!);
 				setLastActionAfterState(afterState);
@@ -171,7 +169,8 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				await target.dragAndDrop(params.sourceSelector, params.targetSelector, { timeout: 10000 });
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: false, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 
 				return {
@@ -340,9 +339,9 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 					"Try clearFirst=true, use a more specific selector, or set slowly=true for key-driven inputs."
 				);
 				const typeTarget = params.selector ? ` into "${params.selector}"` : "";
-				const summary = await deps.postActionSummary(p, target);
-				const jsErrors = deps.getRecentErrors(p.url());
 				const afterState = await deps.captureCompactPageState(p, { selectors: params.selector ? [params.selector] : [], includeBodyText: true, target });
+				const summary = deps.formatCompactStateSummary(afterState);
+				const jsErrors = deps.getRecentErrors(p.url());
 				const diff = diffCompactStates(beforeState!, afterState);
 				setLastActionBeforeState(beforeState!);
 				setLastActionAfterState(afterState);
@@ -404,7 +403,8 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				await target.locator(params.selector).first().setInputFiles(cleanFiles);
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: false, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 
 				return {
@@ -457,7 +457,8 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				const maxScroll = scrollInfo.scrollHeight - scrollInfo.clientHeight;
 				const percent = maxScroll > 0 ? Math.round((scrollInfo.scrollY / maxScroll) * 100) : 0;
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: false, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 
 				return {
@@ -502,7 +503,8 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				await target.locator(params.selector).first().hover({ timeout: 10000 });
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: false, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 
 				return {
@@ -549,26 +551,24 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				actionId = deps.beginTrackedAction("browser_key_press", params, beforeState.url).id;
 				const beforeUrl = p.url();
 				const beforeFocus = await readFocusedDescriptor(target);
-				const beforeDialogCount = await deps.countOpenDialogs(target);
 
 				await p.keyboard.press(params.key);
 				const settle = await deps.settleAfterActionAdaptive(p, { checkFocusStability: true });
 
-				const afterUrl = p.url();
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: true, target });
+				const afterUrl = afterState.url;
 				const afterFocus = await readFocusedDescriptor(target);
-				const afterDialogCount = await deps.countOpenDialogs(target);
 				const verification = deps.verificationFromChecks(
 					[
 						{ name: "url_changed", passed: afterUrl !== beforeUrl, value: afterUrl, expected: `!= ${beforeUrl}` },
 						{ name: "focus_changed", passed: afterFocus !== beforeFocus, value: afterFocus, expected: `!= ${beforeFocus}` },
-						{ name: "dialog_open", passed: afterDialogCount > beforeDialogCount, value: afterDialogCount, expected: `> ${beforeDialogCount}` },
+						{ name: "dialog_open", passed: afterState.dialog.count > beforeState!.dialog.count, value: afterState.dialog.count, expected: `> ${beforeState!.dialog.count}` },
 					],
 					"If this key should trigger UI changes, confirm focus is on the intended element first."
 				);
 
-				const summary = await deps.postActionSummary(p, target);
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
-				const afterState = await deps.captureCompactPageState(p, { includeBodyText: true, target });
 				const diff = diffCompactStates(beforeState!, afterState);
 				setLastActionBeforeState(beforeState!);
 				setLastActionAfterState(afterState);
@@ -660,9 +660,9 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 					"Confirm whether the target select uses option label or value, then retry with that exact text."
 				);
 
-				const summary = await deps.postActionSummary(p, target);
-				const jsErrors = deps.getRecentErrors(p.url());
 				const afterState = await deps.captureCompactPageState(p, { selectors: [params.selector], includeBodyText: true, target });
+				const summary = deps.formatCompactStateSummary(afterState);
+				const jsErrors = deps.getRecentErrors(p.url());
 				const diff = diffCompactStates(beforeState!, afterState);
 				setLastActionBeforeState(beforeState!);
 				setLastActionAfterState(afterState);
@@ -741,9 +741,9 @@ export function registerInteractionTools(pi: ExtensionAPI, deps: ToolDeps): void
 				);
 
 				const state = params.checked ? "checked" : "unchecked";
-				const summary = await deps.postActionSummary(p, target);
-				const jsErrors = deps.getRecentErrors(p.url());
 				const afterState = await deps.captureCompactPageState(p, { selectors: [params.selector], includeBodyText: true, target });
+				const summary = deps.formatCompactStateSummary(afterState);
+				const jsErrors = deps.getRecentErrors(p.url());
 				const diff = diffCompactStates(beforeState!, afterState);
 				setLastActionBeforeState(beforeState!);
 				setLastActionAfterState(afterState);

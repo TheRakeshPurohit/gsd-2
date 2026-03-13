@@ -4,39 +4,6 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
-### R017 — Consolidated state capture per action
-- Class: core-capability
-- Status: active
-- Description: The before-state capture, after-state capture, post-action summary, and recent-error check are consolidated into fewer page.evaluate calls per action. Target: ~50-100ms savings per action.
-- Why it matters: Every action tool currently runs 3-4 separate page.evaluate calls for state capture. Consolidating them reduces latency on every single browser interaction.
-- Source: user
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S01
-- Validation: unmapped
-- Notes: captureCompactPageState and postActionSummary can likely be merged into a single evaluate.
-
-### R018 — Conditional body text capture
-- Class: core-capability
-- Status: active
-- Description: Body text capture (includeBodyText: true) is skipped for low-signal actions (scroll, hover, Tab key press) and enabled for high-signal actions (navigate, click, type, submit).
-- Why it matters: Capturing 4000 chars of body text on every scroll or hover is wasteful. Conditional capture reduces evaluate overhead for frequent low-signal actions.
-- Source: user
-- Primary owning slice: M002/S02
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Requires classifying each tool as high-signal or low-signal.
-
-### R019 — Faster settle on zero mutations
-- Class: core-capability
-- Status: active
-- Description: settleAfterActionAdaptive short-circuits with a smaller quiet window when no mutation observer fires in the first 60ms. Target: ~40-80ms savings on zero-mutation actions.
-- Why it matters: Many SPA interactions produce no DOM changes. The current settle logic always waits the full quiet window regardless. Short-circuiting saves time on the most common case.
-- Source: user
-- Primary owning slice: M002/S02
-- Supporting slices: none
-- Validation: unmapped
-- Notes: Track whether any mutation fired at all; if zero after 60ms, use a shorter quiet window.
-
 ### R020 — Sharp-based screenshot resizing
 - Class: core-capability
 - Status: active
@@ -115,6 +82,39 @@ This file is the explicit capability and coverage contract for the project.
 - Notes: Test what's unit-testable without a running browser (heuristics, scoring, utility functions). Integration tests with Playwright for tools that need a page.
 
 ## Validated
+
+### R017 — Consolidated state capture per action
+- Class: core-capability
+- Status: validated
+- Description: The before-state capture, after-state capture, post-action summary, and recent-error check are consolidated into fewer page.evaluate calls per action. Target: ~50-100ms savings per action.
+- Why it matters: Every action tool currently runs 3-4 separate page.evaluate calls for state capture. Consolidating them reduces latency on every single browser interaction.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S01
+- Validation: postActionSummary eliminated from action tools (grep returns 0 in interaction.ts), countOpenDialogs removed from ToolDeps, high-signal tools use single captureCompactPageState + formatCompactStateSummary pattern. Build passes.
+- Notes: captureCompactPageState and postActionSummary can likely be merged into a single evaluate.
+
+### R018 — Conditional body text capture
+- Class: core-capability
+- Status: validated
+- Description: Body text capture (includeBodyText: true) is skipped for low-signal actions (scroll, hover, Tab key press) and enabled for high-signal actions (navigate, click, type, submit).
+- Why it matters: Capturing 4000 chars of body text on every scroll or hover is wasteful. Conditional capture reduces evaluate overhead for frequent low-signal actions.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: none
+- Validation: grep shows explicit includeBodyText: true for 5 high-signal tools and includeBodyText: false for 4 low-signal tools in interaction.ts. Classification codified in D017. Build passes.
+- Notes: Requires classifying each tool as high-signal or low-signal.
+
+### R019 — Faster settle on zero mutations
+- Class: core-capability
+- Status: validated
+- Description: settleAfterActionAdaptive short-circuits with a smaller quiet window when no mutation observer fires in the first 60ms. Target: ~40-80ms savings on zero-mutation actions.
+- Why it matters: Many SPA interactions produce no DOM changes. The current settle logic always waits the full quiet window regardless. Short-circuiting saves time on the most common case.
+- Source: user
+- Primary owning slice: M002/S02
+- Supporting slices: none
+- Validation: zero_mutation_shortcut settle reason in state.ts type union and settle.ts return path. Combined readSettleState() poll evaluate. 60ms/30ms thresholds codified in D019. Build passes.
+- Notes: Track whether any mutation fired at all; if zero after 60ms, use a shorter quiet window.
 
 ### R015 — Module decomposition of browser-tools
 - Class: quality-attribute
@@ -338,9 +338,9 @@ This file is the explicit capability and coverage contract for the project.
 | R014 | anti-feature | out-of-scope | none | none | n/a |
 | R015 | quality-attribute | validated | M002/S01 | none | jiti load, 43 tools register, slim index, browser spot-check |
 | R016 | quality-attribute | validated | M002/S01 | none | window.__pi injection, zero inline redeclarations, survives navigation |
-| R017 | core-capability | active | M002/S02 | M002/S01 | unmapped |
-| R018 | core-capability | active | M002/S02 | none | unmapped |
-| R019 | core-capability | active | M002/S02 | none | unmapped |
+| R017 | core-capability | validated | M002/S02 | M002/S01 | postActionSummary eliminated, countOpenDialogs removed from ToolDeps, consolidated capture pattern |
+| R018 | core-capability | validated | M002/S02 | none | explicit includeBodyText true/false per tool signal level, classification in D017 |
+| R019 | core-capability | validated | M002/S02 | none | zero_mutation_shortcut settle reason, combined readSettleState poll, 60ms/30ms thresholds in D019 |
 | R020 | core-capability | active | M002/S03 | M002/S01 | unmapped |
 | R021 | core-capability | active | M002/S03 | none | unmapped |
 | R022 | core-capability | active | M002/S04 | M002/S01 | unmapped |
@@ -353,8 +353,8 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Coverage Summary
 
-- Active requirements: 10
-- Validated requirements: 12
+- Active requirements: 7
+- Validated requirements: 15
 - Deferred requirements: 3
 - Out of scope: 3
-- Unmapped active requirements: 10
+- Unmapped active requirements: 7

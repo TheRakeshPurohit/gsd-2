@@ -28,7 +28,7 @@ export default function (pi: ExtensionAPI) {
 		truncateText: u.truncateText, verificationFromChecks: u.verificationFromChecks,
 		verificationLine: u.verificationLine, collectAssertionState: u.collectAssertionState,
 		formatAssertionText: u.formatAssertionText, formatDiffText: u.formatDiffText,
-		getUrlHash: u.getUrlHash, countOpenDialogs: u.countOpenDialogs,
+		getUrlHash: u.getUrlHash,
 		captureClickTargetState: u.captureClickTargetState, readInputLikeValue: u.readInputLikeValue,
 		firstErrorLine: u.firstErrorLine, captureAccessibilityMarkdown: u.captureAccessibilityMarkdown,
 		resolveAccessibilityScope: u.resolveAccessibilityScope,

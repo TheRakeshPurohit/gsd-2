@@ -257,16 +257,16 @@ export function registerRefTools(pi: ExtensionAPI, deps: ToolDeps): void {
 					};
 				}
 
-				const beforeUrl = p.url();
+				const beforeState = await deps.captureCompactPageState(p, { includeBodyText: true, target });
+				const beforeUrl = beforeState.url;
 				const beforeHash = deps.getUrlHash(beforeUrl);
-				const beforeDialogCount = await deps.countOpenDialogs(target);
 				const beforeTargetState = await deps.captureClickTargetState(target, resolved.selector);
 				await target.locator(resolved.selector).first().click({ timeout: 8000 });
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const afterUrl = p.url();
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: true, target });
+				const afterUrl = afterState.url;
 				const afterHash = deps.getUrlHash(afterUrl);
-				const afterDialogCount = await deps.countOpenDialogs(target);
 				const afterTargetState = await deps.captureClickTargetState(target, resolved.selector);
 				const targetStateChanged =
 					beforeTargetState.exists !== afterTargetState.exists ||
@@ -279,12 +279,12 @@ export function registerRefTools(pi: ExtensionAPI, deps: ToolDeps): void {
 						{ name: "url_changed", passed: afterUrl !== beforeUrl, value: afterUrl, expected: `!= ${beforeUrl}` },
 						{ name: "hash_changed", passed: afterHash !== beforeHash, value: afterHash, expected: `!= ${beforeHash}` },
 						{ name: "target_state_changed", passed: targetStateChanged, value: afterTargetState, expected: beforeTargetState },
-						{ name: "dialog_open", passed: afterDialogCount > beforeDialogCount, value: afterDialogCount, expected: `> ${beforeDialogCount}` },
+						{ name: "dialog_open", passed: afterState.dialog.count > beforeState.dialog.count, value: afterState.dialog.count, expected: `> ${beforeState.dialog.count}` },
 					],
 					"Ref may now point to an inert element. Refresh refs with browser_snapshot_refs and retry."
 				);
 
-				const summary = await deps.postActionSummary(p, target);
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 				const versionedRef = deps.formatVersionedRef(refMetadata?.version ?? refVersion, node.ref);
 				return {
@@ -377,7 +377,8 @@ export function registerRefTools(pi: ExtensionAPI, deps: ToolDeps): void {
 				await target.locator(resolved.selector).first().hover({ timeout: 8000 });
 				const settle = await deps.settleAfterActionAdaptive(p);
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: false, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 				const versionedRef = deps.formatVersionedRef(refMetadata?.version ?? refVersion, node.ref);
 				return {
@@ -508,7 +509,8 @@ export function registerRefTools(pi: ExtensionAPI, deps: ToolDeps): void {
 					"Try refreshing refs and confirm this ref still targets an input-like element."
 				);
 
-				const summary = await deps.postActionSummary(p, target);
+				const afterState = await deps.captureCompactPageState(p, { includeBodyText: true, target });
+				const summary = deps.formatCompactStateSummary(afterState);
 				const jsErrors = deps.getRecentErrors(p.url());
 				const versionedRef = deps.formatVersionedRef(refMetadata?.version ?? refVersion, node.ref);
 				return {
