@@ -151,6 +151,12 @@ const unitDispatchCount = new Map<string, number>();
 const MAX_UNIT_DISPATCHES = 3;
 /** Retry index at which a stub summary placeholder is written when the summary is still absent. */
 const STUB_RECOVERY_THRESHOLD = 2;
+/** Hard cap on total dispatches per unit across ALL reconciliation cycles.
+ *  unitDispatchCount can be reset by loop-recovery/self-repair paths, but this
+ *  counter is never reset — it catches infinite reconciliation loops where
+ *  artifacts exist but deriveState keeps returning the same unit. */
+const unitLifetimeDispatches = new Map<string, number>();
+const MAX_LIFETIME_DISPATCHES = 6;
 
 /** Tracks recovery attempt count per unit for backoff and diagnostics. */
 const unitRecoveryCount = new Map<string, number>();
@@ -367,6 +373,7 @@ export async function stopAuto(ctx?: ExtensionContext, pi?: ExtensionAPI): Promi
   stepMode = false;
   unitDispatchCount.clear();
   unitRecoveryCount.clear();
+  unitLifetimeDispatches.clear();
   currentUnit = null;
   currentMilestoneId = null;
   cachedSliceProgress = null;
@@ -568,6 +575,7 @@ export async function startAuto(
     cmdCtx = ctx;
     basePath = base;
     unitDispatchCount.clear();
+    unitLifetimeDispatches.clear();
     // Re-initialize metrics in case ledger was lost during pause
     if (!getLedger()) initMetrics(base);
     // Ensure milestone ID is set on git service for integration branch resolution
@@ -687,6 +695,7 @@ export async function startAuto(
   basePath = base;
   unitDispatchCount.clear();
   unitRecoveryCount.clear();
+  unitLifetimeDispatches.clear();
   completedKeySet.clear();
   loadPersistedKeys(base, completedKeySet);
   resetHookState();
@@ -1396,6 +1405,7 @@ async function dispatchNextUnit(
     // Reset stuck detection for new milestone
     unitDispatchCount.clear();
     unitRecoveryCount.clear();
+    unitLifetimeDispatches.clear();
     // Capture integration branch for the new milestone and update git service
     captureIntegrationBranch(basePath, mid);
   }
@@ -1888,6 +1898,26 @@ async function dispatchNextUnit(
   // Pattern A→B→A→B would reset retryCount every time; this map catches it.
   const dispatchKey = `${unitType}/${unitId}`;
   const prevCount = unitDispatchCount.get(dispatchKey) ?? 0;
+
+  // Hard lifetime cap — survives counter resets from loop-recovery/self-repair.
+  // Catches the case where reconciliation "succeeds" (artifacts exist) but
+  // deriveState keeps returning the same unit, creating an infinite cycle.
+  const lifetimeCount = (unitLifetimeDispatches.get(dispatchKey) ?? 0) + 1;
+  unitLifetimeDispatches.set(dispatchKey, lifetimeCount);
+  if (lifetimeCount > MAX_LIFETIME_DISPATCHES) {
+    if (currentUnit) {
+      const modelId = ctx.model?.id ?? "unknown";
+      snapshotUnitMetrics(ctx, currentUnit.type, currentUnit.id, currentUnit.startedAt, modelId);
+    }
+    saveActivityLog(ctx, basePath, unitType, unitId);
+    const expected = diagnoseExpectedArtifact(unitType, unitId, basePath);
+    await stopAuto(ctx, pi);
+    ctx.ui.notify(
+      `Hard loop detected: ${unitType} ${unitId} dispatched ${lifetimeCount} times total (across reconciliation cycles). Stopping.${expected ? `\n   Expected artifact: ${expected}` : ""}\n   This may indicate deriveState() keeps returning the same unit despite artifacts existing.\n   Check .gsd/completed-units.json and the slice plan checkbox state.`,
+      "error",
+    );
+    return;
+  }
   if (prevCount >= MAX_UNIT_DISPATCHES) {
     if (currentUnit) {
       const modelId = ctx.model?.id ?? "unknown";
@@ -1912,7 +1942,13 @@ async function dispatchNextUnit(
               `Loop recovery: ${unitId} reconciled after ${prevCount + 1} dispatches — blocker artifacts written, pipeline advancing.\n   Review ${status.summaryPath} and replace the placeholder with real work.`,
               "warning",
             );
+            // Persist completion so idempotency check prevents re-dispatch
+            // if deriveState keeps returning this unit (#462).
+            const reconciledKey = `${unitType}/${unitId}`;
+            persistCompletedKey(basePath, reconciledKey);
+            completedKeySet.add(reconciledKey);
             unitDispatchCount.delete(dispatchKey);
+            invalidateStateCache();
             await new Promise(r => setImmediate(r));
             await dispatchNextUnit(ctx, pi);
             return;
@@ -1947,7 +1983,12 @@ async function dispatchNextUnit(
               `Self-repaired ${unitId}: summary existed but checkbox was unmarked. Marked [x] and advancing.`,
               "warning",
             );
+            // Persist completion so idempotency check prevents re-dispatch (#462).
+            const repairedKey = `${unitType}/${unitId}`;
+            persistCompletedKey(basePath, repairedKey);
+            completedKeySet.add(repairedKey);
             unitDispatchCount.delete(dispatchKey);
+            invalidateStateCache();
             await new Promise(r => setImmediate(r));
             await dispatchNextUnit(ctx, pi);
             return;
