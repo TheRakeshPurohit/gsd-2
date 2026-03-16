@@ -379,7 +379,7 @@ async function loadChangelog(basePath: string, milestones: VisualizerMilestone[]
           path: f.path,
           description: f.description,
         })),
-        completedAt: summary.frontmatter.completed_at ?? '',
+        completedAt: String(summary.frontmatter.completed_at ?? ''),
       };
 
       changelogCache.set(cacheKey, { mtime, entry });
@@ -388,7 +388,7 @@ async function loadChangelog(basePath: string, milestones: VisualizerMilestone[]
   }
 
   // Sort by completedAt descending
-  entries.sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  entries.sort((a, b) => String(b.completedAt || '').localeCompare(String(a.completedAt || '')));
 
   return { entries };
 }

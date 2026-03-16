@@ -165,6 +165,17 @@ assertTrue(
   "VisualizerData has changelog field",
 );
 
+// completedAt must be coerced to String() to handle YAML Date objects (issue #644)
+assertTrue(
+  dataSrc.includes("String(summary.frontmatter.completed_at"),
+  "completedAt assignment coerces to String() for YAML Date safety",
+);
+
+assertTrue(
+  dataSrc.includes("String(b.completedAt") && dataSrc.includes("String(a.completedAt"),
+  "changelog sort coerces completedAt to String() for YAML Date safety",
+);
+
 // Verify overlay source exists and imports data module
 const overlayPath = join(__dirname, "..", "visualizer-overlay.ts");
 const overlaySrc = readFileSync(overlayPath, "utf-8");
