@@ -27,7 +27,8 @@ import { createBashTool, createWriteTool, createReadTool, createEditTool, isTool
 import { Type } from "@sinclair/typebox";
 
 import { debugLog, debugTime } from "./debug-logger.js";
-import { registerGSDCommand, loadToolApiKeys } from "./commands.js";
+import { registerGSDCommand } from "./commands.js";
+import { loadToolApiKeys } from "./commands-config.js";
 import { registerExitCommand } from "./exit-command.js";
 import { registerWorktreeCommand, getWorktreeOriginalCwd, getActiveWorktreeName } from "./worktree-command.js";
 import { getActiveAutoWorktreeContext } from "./auto-worktree.js";

@@ -45,12 +45,6 @@ import { handleCleanupBranches, handleCleanupSnapshots, handleSkip, handleDryRun
 import { handleDoctor, handleSteer, handleCapture, handleTriage, handleKnowledge, handleRunHook, handleUpdate, handleSkillHealth } from "./commands-handlers.js";
 import { handleLogs } from "./commands-logs.js";
 
-// ─── Re-exports (preserve public API surface) ───────────────────────────────
-export { handlePrefs, handlePrefsMode, handlePrefsWizard, ensurePreferencesFile, handleImportClaude, buildCategorySummaries, serializePreferencesToFrontmatter, yamlSafeString, configureMode } from "./commands-prefs-wizard.js";
-export { TOOL_KEYS, loadToolApiKeys, getConfigAuthStorage, handleConfig } from "./commands-config.js";
-export { type InspectData, formatInspectOutput, handleInspect } from "./commands-inspect.js";
-export { handleCleanupBranches, handleCleanupSnapshots, handleSkip, handleDryRun } from "./commands-maintenance.js";
-export { handleDoctor, handleSteer, handleCapture, handleTriage, handleKnowledge, handleRunHook, handleUpdate, handleSkillHealth } from "./commands-handlers.js";
 
 export function dispatchDoctorHeal(pi: ExtensionAPI, scope: string | undefined, reportText: string, structuredIssues: string): void {
   const workflowPath = process.env.GSD_WORKFLOW_PATH ?? join(process.env.HOME ?? "~", ".pi", "GSD-WORKFLOW.md");
