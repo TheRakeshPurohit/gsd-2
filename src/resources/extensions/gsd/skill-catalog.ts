@@ -254,13 +254,14 @@ export const SKILL_CATALOG: SkillPack[] = [
       "azure-cost-optimization",
       "azure-diagnostics",
     ],
+    matchFiles: ["azure-pipelines.yml"],
   },
   {
     label: "AWS",
     description: "AWS deployment, Lambda, and serverless patterns",
     repo: "awslabs/agent-plugins",
     skills: ["deploy", "aws-lambda", "aws-serverless-deployment"],
-    matchFiles: ["cdk.json", "samconfig.toml", "serverless.yml"],
+    matchFiles: ["cdk.json", "samconfig.toml", "serverless.yml", "serverless.yaml"],
   },
   // ── Essential (all projects) ────────────────────────────────────────────
   {

@@ -97,6 +97,8 @@ export const PROJECT_FILES = [
   "cdk.json",
   "samconfig.toml",
   "serverless.yml",
+  "serverless.yaml",
+  "azure-pipelines.yml",
   // React Native markers
   "metro.config.js",
   "metro.config.ts",

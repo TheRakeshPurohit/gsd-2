@@ -448,10 +448,10 @@ function migrateSkillsToEcosystemDir(agentDir: string): void {
     return // marker already exists (another process won the race, or already migrated)
   }
 
-  const ecosystemDir = join(homedir(), '.agents', 'skills')
-  mkdirSync(ecosystemDir, { recursive: true })
-
   try {
+    const ecosystemDir = join(homedir(), '.agents', 'skills')
+    mkdirSync(ecosystemDir, { recursive: true })
+
     const entries = readdirSync(legacyDir, { withFileTypes: true })
     let migrated = 0
     for (const entry of entries) {
@@ -495,7 +495,8 @@ function migrateSkillsToEcosystemDir(agentDir: string): void {
     // Write migration info to the marker
     try { writeFileSync(markerFd, `Migrated ${migrated} skill(s) to ${ecosystemDir} on ${new Date().toISOString()}\n`) } catch { /* non-fatal */ }
   } catch {
-    // can't read legacy dir — skip silently
+    // can't create ecosystem dir or read legacy dir — remove marker so we retry next launch
+    try { unlinkSync(markerPath) } catch { /* non-fatal */ }
   } finally {
     try { closeSync(markerFd) } catch { /* non-fatal */ }
   }
