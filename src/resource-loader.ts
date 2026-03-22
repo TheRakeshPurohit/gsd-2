@@ -494,9 +494,10 @@ function migrateSkillsToEcosystemDir(agentDir: string): void {
       }
     }
 
-    // If there were skills to migrate but ALL copies failed, remove the marker
-    // so migration retries on the next launch. Keeps the legacy dir as fallback.
-    if (candidates > 0 && migrated === 0) {
+    // If any skills failed to copy, remove the marker so migration retries
+    // on the next launch.  This keeps the legacy dir as fallback until every
+    // skill has been successfully migrated.
+    if (migrated < candidates) {
       try { closeSync(markerFd); markerFd = -1 } catch { /* non-fatal */ }
       try { unlinkSync(markerPath) } catch { /* non-fatal */ }
       return
