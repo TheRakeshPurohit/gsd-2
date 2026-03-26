@@ -184,7 +184,7 @@ export const DISPATCH_RULES: DispatchRule[] = [
       }
 
       for (const sliceId of completedSliceIds) {
-        const resultFile = resolveSliceFile(basePath, mid, sliceId, "UAT-RESULT");
+        const resultFile = resolveSliceFile(basePath, mid, sliceId, "UAT");
         if (!resultFile) continue;
         const content = await loadFile(resultFile);
         if (!content) continue;
@@ -196,15 +196,9 @@ export const DISPATCH_RULES: DispatchRule[] = [
         // produce PARTIAL when all automatable checks pass but human-only
         // checks remain — this should not block progression.
         const acceptableVerdicts: string[] = ["pass", "passed"];
-        const uatFile = resolveSliceFile(basePath, mid, sliceId, "UAT");
-        if (uatFile) {
-          const uatContent = await loadFile(uatFile);
-          if (uatContent) {
-            const uatType = extractUatType(uatContent);
-            if (uatType === "mixed" || uatType === "human-experience" || uatType === "live-runtime") {
-              acceptableVerdicts.push("partial");
-            }
-          }
+        const uatType = extractUatType(content);
+        if (uatType === "mixed" || uatType === "human-experience" || uatType === "live-runtime") {
+          acceptableVerdicts.push("partial");
         }
 
         if (verdict && !acceptableVerdicts.includes(verdict)) {

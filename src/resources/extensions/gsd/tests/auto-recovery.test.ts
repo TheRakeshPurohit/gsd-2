@@ -112,7 +112,7 @@ test("resolveExpectedArtifactPath returns correct path for all slice-level types
 
   const uatResult = resolveExpectedArtifactPath("run-uat", "M001/S01", base);
   assert.ok(uatResult);
-  assert.ok(uatResult!.includes("UAT-RESULT"));
+  assert.ok(uatResult!.includes("UAT"));
 });
 
 // ─── diagnoseExpectedArtifact ─────────────────────────────────────────────

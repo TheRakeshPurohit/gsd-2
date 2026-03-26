@@ -772,11 +772,8 @@ export async function checkNeedsRunUat(
         if (!uatFile) return null;
         const uatContent = await loadFile(uatFile);
         if (!uatContent) return null;
-        const uatResultFile = resolveSliceFile(base, mid, sid, "UAT-RESULT");
-        if (uatResultFile) {
-          const hasResult = !!(await loadFile(uatResultFile));
-          if (hasResult) return null;
-        }
+        // If the UAT file already contains a verdict, UAT has been run — skip
+        if (/verdict:\s*[\w-]+/i.test(uatContent)) return null;
         const uatType = extractUatType(uatContent) ?? "artifact-driven";
         return { sliceId: sid, uatType };
       }
@@ -799,11 +796,8 @@ export async function checkNeedsRunUat(
   if (!uatFileFb) return null;
   const uatContentFb = await loadFile(uatFileFb);
   if (!uatContentFb) return null;
-  const uatResultFb = resolveSliceFile(base, mid, uatSid, "UAT-RESULT");
-  if (uatResultFb) {
-    const hasResultFb = !!(await loadFile(uatResultFb));
-    if (hasResultFb) return null;
-  }
+  // If the UAT file already contains a verdict, UAT has been run — skip
+  if (/verdict:\s*[\w-]+/i.test(uatContentFb)) return null;
   const uatTypeFb = extractUatType(uatContentFb) ?? "artifact-driven";
   return { sliceId: uatSid, uatType: uatTypeFb };
 }
@@ -1349,8 +1343,8 @@ export async function buildValidateMilestonePrompt(
     const summaryRel = relSliceFile(base, mid, sid, "SUMMARY");
     inlined.push(await inlineFile(summaryPath, summaryRel, `${sid} Summary`));
 
-    const uatPath = resolveSliceFile(base, mid, sid, "UAT-RESULT");
-    const uatRel = relSliceFile(base, mid, sid, "UAT-RESULT");
+    const uatPath = resolveSliceFile(base, mid, sid, "UAT");
+    const uatRel = relSliceFile(base, mid, sid, "UAT");
     const uatInline = await inlineFileOptional(uatPath, uatRel, `${sid} UAT Result`);
     if (uatInline) inlined.push(uatInline);
   }
@@ -1501,7 +1495,7 @@ export async function buildRunUatPrompt(
 
   const inlinedContext = capPreamble(`## Inlined Context (preloaded — do not re-read these files)\n\n${inlined.join("\n\n---\n\n")}`);
 
-  const uatResultPath = join(base, relSliceFile(base, mid, sliceId, "UAT-RESULT"));
+  const uatResultPath = join(base, relSliceFile(base, mid, sliceId, "UAT"));
   const uatType = extractUatType(uatContent) ?? "artifact-driven";
 
   return loadPrompt("run-uat", {

@@ -46,7 +46,7 @@ GSD extension source code is at: `{{gsdSourceDir}}`
 ├── milestones/{ID}/             — milestone artifacts
 │   ├── {ID}-ROADMAP.md, {ID}-RESEARCH.md, {ID}-CONTEXT.md, {ID}-SUMMARY.md
 │   └── slices/{SID}/            — slice artifacts
-│       ├── {SID}-PLAN.md, {SID}-RESEARCH.md, {SID}-UAT-RESULT.md, {SID}-SUMMARY.md
+│       ├── {SID}-PLAN.md, {SID}-RESEARCH.md, {SID}-UAT.md, {SID}-SUMMARY.md
 │       └── tasks/{TID}-PLAN.md, {TID}-SUMMARY.md
 └── worktrees/{milestoneId}/     — per-milestone worktree with replicated .gsd/
 ```
