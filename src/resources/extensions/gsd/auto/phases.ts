@@ -46,6 +46,17 @@ export function _resolveReportBasePath(s: Pick<AutoSession, "originalBasePath" |
 }
 
 /**
+ * Resolve the authoritative project base for dispatch guards.
+ * Prior-milestone completion lives at the project root, even when the active
+ * unit is running inside an auto worktree.
+ */
+export function _resolveDispatchGuardBasePath(
+  s: Pick<AutoSession, "originalBasePath" | "basePath">,
+): string {
+  return s.originalBasePath || s.basePath;
+}
+
+/**
  * Generate and write an HTML milestone report snapshot.
  * Extracted from the milestone-transition block in autoLoop.
  */
@@ -667,9 +678,10 @@ export async function runDispatch(
     prompt = preDispatchResult.prompt;
   }
 
+  const guardBasePath = _resolveDispatchGuardBasePath(s);
   const priorSliceBlocker = deps.getPriorSliceCompletionBlocker(
-    s.basePath,
-    deps.getMainBranch(s.basePath),
+    guardBasePath,
+    deps.getMainBranch(guardBasePath),
     unitType,
     unitId,
   );
@@ -707,8 +719,17 @@ export async function runGuards(
   const budgetCeiling = prefs?.budget_ceiling;
   if (budgetCeiling !== undefined && budgetCeiling > 0) {
     const currentLedger = deps.getLedger() as { units: unknown } | null;
-    const totalCost = currentLedger
-      ? deps.getProjectTotals(currentLedger.units).cost
+    // In parallel worker mode, only count cost from the current auto-mode session
+    // to avoid hitting the ceiling due to historical project-wide spend (#2184).
+    let costUnits = currentLedger?.units;
+    if (process.env.GSD_PARALLEL_WORKER && s.autoStartTime && Array.isArray(costUnits)) {
+      const sessionStartISO = new Date(s.autoStartTime).toISOString();
+      costUnits = costUnits.filter(
+        (u: { startedAt?: string }) => u.startedAt != null && u.startedAt >= sessionStartISO,
+      );
+    }
+    const totalCost = costUnits
+      ? deps.getProjectTotals(costUnits).cost
       : 0;
     const budgetPct = totalCost / budgetCeiling;
     const budgetAlertLevel = deps.getBudgetAlertLevel(budgetPct);
