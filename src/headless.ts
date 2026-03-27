@@ -345,8 +345,11 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
     if (recentEvents.length > 20) recentEvents.shift()
   }
 
-  // Stdin writer for sending extension_ui_response to child
-  let stdinWriter: ((data: string) => void) | null = null
+  // Client started flag — replaces old stdinWriter null-check
+  let clientStarted = false
+  // Adapter for AnswerInjector — wraps client.sendUIResponse in a writeToStdin-compatible callback
+  // Initialized after client.start(); events won't fire before then
+  let injectorStdinAdapter: (data: string) => void = () => {}
 
   // Supervised mode state
   const pendingResponseTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -413,8 +416,18 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
       if (line) process.stderr.write(line + '\n')
     }
 
+    // Handle execution_complete (v2 structured completion)
+    if (eventObj.type === 'execution_complete' && !completed) {
+      completed = true
+      const status = String(eventObj.status ?? 'success')
+      exitCode = mapStatusToExitCode(status)
+      if (eventObj.status === 'blocked') blocked = true
+      resolveCompletion()
+      return
+    }
+
     // Handle extension_ui_request
-    if (eventObj.type === 'extension_ui_request' && stdinWriter) {
+    if (eventObj.type === 'extension_ui_request' && clientStarted) {
       // Check for terminal notification before auto-responding
       if (isBlockedNotification(eventObj)) {
         blocked = true
@@ -431,7 +444,7 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
 
       // Answer injection: try to handle with pre-supplied answers before supervised/auto
       if (injector && !FIRE_AND_FORGET_METHODS.has(String(eventObj.method ?? ''))) {
-        if (injector.tryHandle(eventObj, stdinWriter)) {
+        if (injector.tryHandle(eventObj, injectorStdinAdapter)) {
           if (completed) {
             exitCode = blocked ? EXIT_BLOCKED : EXIT_SUCCESS
             resolveCompletion()
@@ -449,12 +462,12 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
         const eventId = String(eventObj.id ?? '')
         const timer = setTimeout(() => {
           pendingResponseTimers.delete(eventId)
-          handleExtensionUIRequest(eventObj as unknown as ExtensionUIRequest, stdinWriter!)
+          handleExtensionUIRequest(eventObj as unknown as ExtensionUIRequest, client)
           process.stdout.write(JSON.stringify({ type: 'supervised_timeout', id: eventId, method }) + '\n')
         }, responseTimeout)
         pendingResponseTimers.set(eventId, timer)
       } else {
-        handleExtensionUIRequest(eventObj as unknown as ExtensionUIRequest, stdinWriter)
+        handleExtensionUIRequest(eventObj as unknown as ExtensionUIRequest, client)
       }
 
       // If we detected a terminal notification, resolve after responding
@@ -499,22 +512,33 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
     process.exit(1)
   }
 
-  // Access stdin writer from the internal process
-  const internalProcess = (client as any).process as ChildProcess
-  if (!internalProcess?.stdin) {
-    process.stderr.write('[headless] Error: Cannot access child process stdin\n')
-    await client.stop()
-    if (timeoutTimer) clearTimeout(timeoutTimer)
-    process.exit(1)
+  // v2 protocol negotiation — attempt init for structured completion events
+  let v2Enabled = false
+  try {
+    await client.init({ clientId: 'gsd-headless' })
+    v2Enabled = true
+  } catch {
+    process.stderr.write('[headless] Warning: v2 init failed, falling back to v1 string-matching\n')
   }
 
-  stdinWriter = (data: string) => {
-    internalProcess.stdin!.write(data)
+  clientStarted = true
+
+  // Build injector adapter — wraps client.sendUIResponse for AnswerInjector's writeToStdin interface
+  injectorStdinAdapter = (data: string) => {
+    try {
+      const parsed = JSON.parse(data.trim())
+      if (parsed.type === 'extension_ui_response' && parsed.id) {
+        const { id, value, values, confirmed, cancelled } = parsed
+        client.sendUIResponse(id, { value, values, confirmed, cancelled })
+      }
+    } catch {
+      process.stderr.write('[headless] Warning: injector adapter received unparseable data\n')
+    }
   }
 
   // Start supervised stdin reader for orchestrator commands
   if (options.supervised) {
-    stopSupervisedReader = startSupervisedStdinReader(stdinWriter, client, (id) => {
+    stopSupervisedReader = startSupervisedStdinReader(client, (id) => {
       const timer = pendingResponseTimers.get(id)
       if (timer) {
         clearTimeout(timer)
@@ -525,14 +549,18 @@ async function runHeadlessOnce(options: HeadlessOptions, restartCount: number): 
     process.stdin.resume()
   }
 
-  // Detect child process crash
-  internalProcess.on('exit', (code) => {
-    if (!completed) {
-      const msg = `[headless] Child process exited unexpectedly with code ${code ?? 'null'}\n`
-      process.stderr.write(msg)
-      exitCode = EXIT_ERROR
-      resolveCompletion()
-    }  })
+  // Detect child process crash (read-only exit event subscription — not stdin access)
+  const internalProcess = (client as any).process as ChildProcess
+  if (internalProcess) {
+    internalProcess.on('exit', (code) => {
+      if (!completed) {
+        const msg = `[headless] Child process exited unexpectedly with code ${code ?? 'null'}\n`
+        process.stderr.write(msg)
+        exitCode = EXIT_ERROR
+        resolveCompletion()
+      }
+    })
+  }
 
   if (!options.json) {
     process.stderr.write(`[headless] Running /gsd ${options.command}${options.commandArgs.length > 0 ? ' ' + options.commandArgs.join(' ') : ''}...\n`)
