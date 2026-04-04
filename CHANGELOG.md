@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.61.0] - 2026-04-04
+
+### Added
+- stop/backtrack capture classifications for milestone regression (#3488)
+- GSD context optimization with model routing and context masking
+
 ## [2.60.0] - 2026-04-04
 
 ### Added
@@ -2277,7 +2283,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - License updated to MIT
 
-[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.60.0...HEAD
+[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.61.0...HEAD
+[2.61.0]: https://github.com/gsd-build/gsd-2/compare/v2.60.0...v2.61.0
 [2.60.0]: https://github.com/gsd-build/gsd-2/compare/v2.59.0...v2.60.0
 [2.59.0]: https://github.com/gsd-build/gsd-2/compare/v2.58.0...v2.59.0
 [2.58.0]: https://github.com/gsd-build/gsd-2/compare/v2.57.0...v2.58.0
