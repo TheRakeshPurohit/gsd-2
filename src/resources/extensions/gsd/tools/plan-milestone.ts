@@ -241,6 +241,8 @@ export async function handlePlanMilestone(
       });
 
       upsertMilestonePlanning(params.milestoneId, {
+        title: params.title,
+        status: params.status ?? "active",
         vision: params.vision,
         successCriteria: params.successCriteria,
         keyRisks: params.keyRisks,
@@ -252,7 +254,7 @@ export async function handlePlanMilestone(
         definitionOfDone: params.definitionOfDone,
         requirementCoverage: params.requirementCoverage,
         boundaryMapMarkdown: params.boundaryMapMarkdown,
-      }, params.title);
+      });
 
       for (const slice of params.slices) {
         // Preserve completed/done status on re-plan (#2558).
