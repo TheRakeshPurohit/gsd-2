@@ -201,9 +201,10 @@ function loadPreferencesFile(path: string, scope: "global" | "project"): LoadedG
 
 let _warnedUnrecognizedFormat = false;
 
-/** @internal Reset the warn-once flag — exported for testing only. */
+/** @internal Reset the warn-once flags — exported for testing only. */
 export function _resetParseWarningFlag(): void {
   _warnedUnrecognizedFormat = false;
+  _warnedFrontmatterParse = false;
 }
 
 /** @internal Exported for testing only */
@@ -235,6 +236,7 @@ export function parsePreferencesMarkdown(content: string): GSDPreferences | null
   return null;
 }
 
+let _warnedFrontmatterParse = false;
 function parseFrontmatterBlock(frontmatter: string): GSDPreferences {
   try {
     const parsed = parseYaml(frontmatter);
@@ -243,7 +245,11 @@ function parseFrontmatterBlock(frontmatter: string): GSDPreferences {
     }
     return parsed as GSDPreferences;
   } catch (e) {
-    logWarning("guided", `YAML parse error in frontmatter block: ${(e as Error).message}`);
+    // Warn at most once per session to avoid flooding TUI (#3376)
+    if (!_warnedFrontmatterParse) {
+      _warnedFrontmatterParse = true;
+      logWarning("guided", `YAML parse error in preferences frontmatter (suppressing further): ${(e as Error).message}`);
+    }
     return {} as GSDPreferences;
   }
 }
