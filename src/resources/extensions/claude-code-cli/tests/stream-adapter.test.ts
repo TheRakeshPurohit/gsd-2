@@ -1,5 +1,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import {
 	makeStreamExhaustedErrorMessage,
 	buildPromptFromContext,
@@ -126,6 +129,116 @@ describe("stream-adapter — session persistence (#2859)", () => {
 			Array.isArray(opusOpts.betas) && opusOpts.betas.length === 0,
 			"non-sonnet models should have empty betas",
 		);
+	});
+
+	test("buildSdkOptions includes workflow MCP server config when env is set", () => {
+		const prev = {
+			GSD_WORKFLOW_MCP_COMMAND: process.env.GSD_WORKFLOW_MCP_COMMAND,
+			GSD_WORKFLOW_MCP_NAME: process.env.GSD_WORKFLOW_MCP_NAME,
+			GSD_WORKFLOW_MCP_ARGS: process.env.GSD_WORKFLOW_MCP_ARGS,
+			GSD_WORKFLOW_MCP_ENV: process.env.GSD_WORKFLOW_MCP_ENV,
+			GSD_WORKFLOW_MCP_CWD: process.env.GSD_WORKFLOW_MCP_CWD,
+		};
+		try {
+			process.env.GSD_WORKFLOW_MCP_COMMAND = "node";
+			process.env.GSD_WORKFLOW_MCP_NAME = "gsd-workflow";
+			process.env.GSD_WORKFLOW_MCP_ARGS = JSON.stringify(["packages/mcp-server/dist/cli.js"]);
+			process.env.GSD_WORKFLOW_MCP_ENV = JSON.stringify({ GSD_CLI_PATH: "/tmp/gsd" });
+			process.env.GSD_WORKFLOW_MCP_CWD = "/tmp/project";
+
+			const options = buildSdkOptions("claude-sonnet-4-20250514", "test");
+			assert.deepEqual(options.mcpServers, {
+				"gsd-workflow": {
+					command: "node",
+					args: ["packages/mcp-server/dist/cli.js"],
+					env: { GSD_CLI_PATH: "/tmp/gsd" },
+					cwd: "/tmp/project",
+				},
+			});
+		} finally {
+			process.env.GSD_WORKFLOW_MCP_COMMAND = prev.GSD_WORKFLOW_MCP_COMMAND;
+			process.env.GSD_WORKFLOW_MCP_NAME = prev.GSD_WORKFLOW_MCP_NAME;
+			process.env.GSD_WORKFLOW_MCP_ARGS = prev.GSD_WORKFLOW_MCP_ARGS;
+			process.env.GSD_WORKFLOW_MCP_ENV = prev.GSD_WORKFLOW_MCP_ENV;
+			process.env.GSD_WORKFLOW_MCP_CWD = prev.GSD_WORKFLOW_MCP_CWD;
+		}
+	});
+
+	test("buildSdkOptions omits workflow MCP server config when env is unset", () => {
+		const prev = {
+			GSD_WORKFLOW_MCP_COMMAND: process.env.GSD_WORKFLOW_MCP_COMMAND,
+			GSD_WORKFLOW_MCP_NAME: process.env.GSD_WORKFLOW_MCP_NAME,
+			GSD_WORKFLOW_MCP_ARGS: process.env.GSD_WORKFLOW_MCP_ARGS,
+			GSD_WORKFLOW_MCP_ENV: process.env.GSD_WORKFLOW_MCP_ENV,
+			GSD_WORKFLOW_MCP_CWD: process.env.GSD_WORKFLOW_MCP_CWD,
+		};
+		try {
+			delete process.env.GSD_WORKFLOW_MCP_COMMAND;
+			delete process.env.GSD_WORKFLOW_MCP_NAME;
+			delete process.env.GSD_WORKFLOW_MCP_ARGS;
+			delete process.env.GSD_WORKFLOW_MCP_ENV;
+			delete process.env.GSD_WORKFLOW_MCP_CWD;
+
+			const originalCwd = process.cwd();
+			const emptyDir = mkdtempSync(join(tmpdir(), "claude-mcp-none-"));
+			process.chdir(emptyDir);
+			const options = buildSdkOptions("claude-sonnet-4-20250514", "test");
+			process.chdir(originalCwd);
+			assert.equal((options as any).mcpServers, undefined);
+			rmSync(emptyDir, { recursive: true, force: true });
+		} finally {
+			process.env.GSD_WORKFLOW_MCP_COMMAND = prev.GSD_WORKFLOW_MCP_COMMAND;
+			process.env.GSD_WORKFLOW_MCP_NAME = prev.GSD_WORKFLOW_MCP_NAME;
+			process.env.GSD_WORKFLOW_MCP_ARGS = prev.GSD_WORKFLOW_MCP_ARGS;
+			process.env.GSD_WORKFLOW_MCP_ENV = prev.GSD_WORKFLOW_MCP_ENV;
+			process.env.GSD_WORKFLOW_MCP_CWD = prev.GSD_WORKFLOW_MCP_CWD;
+		}
+	});
+
+	test("buildSdkOptions auto-detects local workflow MCP dist CLI when present", () => {
+		const prev = {
+			GSD_WORKFLOW_MCP_COMMAND: process.env.GSD_WORKFLOW_MCP_COMMAND,
+			GSD_WORKFLOW_MCP_NAME: process.env.GSD_WORKFLOW_MCP_NAME,
+			GSD_WORKFLOW_MCP_ARGS: process.env.GSD_WORKFLOW_MCP_ARGS,
+			GSD_WORKFLOW_MCP_ENV: process.env.GSD_WORKFLOW_MCP_ENV,
+			GSD_WORKFLOW_MCP_CWD: process.env.GSD_WORKFLOW_MCP_CWD,
+			GSD_CLI_PATH: process.env.GSD_CLI_PATH,
+		};
+		const originalCwd = process.cwd();
+		const repoDir = mkdtempSync(join(tmpdir(), "claude-mcp-detect-"));
+		try {
+			delete process.env.GSD_WORKFLOW_MCP_COMMAND;
+			delete process.env.GSD_WORKFLOW_MCP_NAME;
+			delete process.env.GSD_WORKFLOW_MCP_ARGS;
+			delete process.env.GSD_WORKFLOW_MCP_ENV;
+			delete process.env.GSD_WORKFLOW_MCP_CWD;
+			process.env.GSD_CLI_PATH = "/tmp/gsd";
+
+			const distDir = join(repoDir, "packages", "mcp-server", "dist");
+			mkdirSync(distDir, { recursive: true });
+			writeFileSync(join(distDir, "cli.js"), "#!/usr/bin/env node\n");
+			process.chdir(repoDir);
+			const resolvedRepoDir = realpathSync(repoDir);
+
+			const options = buildSdkOptions("claude-sonnet-4-20250514", "test");
+			assert.deepEqual(options.mcpServers, {
+				"gsd-workflow": {
+					command: process.execPath,
+					args: [realpathSync(resolve(repoDir, "packages", "mcp-server", "dist", "cli.js"))],
+					env: { GSD_CLI_PATH: "/tmp/gsd" },
+					cwd: resolvedRepoDir,
+				},
+			});
+		} finally {
+			process.chdir(originalCwd);
+			rmSync(repoDir, { recursive: true, force: true });
+			process.env.GSD_WORKFLOW_MCP_COMMAND = prev.GSD_WORKFLOW_MCP_COMMAND;
+			process.env.GSD_WORKFLOW_MCP_NAME = prev.GSD_WORKFLOW_MCP_NAME;
+			process.env.GSD_WORKFLOW_MCP_ARGS = prev.GSD_WORKFLOW_MCP_ARGS;
+			process.env.GSD_WORKFLOW_MCP_ENV = prev.GSD_WORKFLOW_MCP_ENV;
+			process.env.GSD_WORKFLOW_MCP_CWD = prev.GSD_WORKFLOW_MCP_CWD;
+			process.env.GSD_CLI_PATH = prev.GSD_CLI_PATH;
+		}
 	});
 });
 

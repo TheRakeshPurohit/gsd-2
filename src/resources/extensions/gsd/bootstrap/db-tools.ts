@@ -8,15 +8,10 @@ import { ensureDbOpen } from "./dynamic-tools.js";
 import { StringEnum } from "@gsd/pi-ai";
 import { logError } from "../workflow-logger.js";
 import { getErrorMessage } from "../error-utils.js";
-import { shouldBlockContextArtifactSave } from "./write-gate.js";
-
-const SUPPORTED_SUMMARY_ARTIFACT_TYPES = ["SUMMARY", "RESEARCH", "CONTEXT", "ASSESSMENT", "CONTEXT-DRAFT"] as const;
-
-export function isSupportedSummaryArtifactType(
-  artifactType: string,
-): artifactType is (typeof SUPPORTED_SUMMARY_ARTIFACT_TYPES)[number] {
-  return (SUPPORTED_SUMMARY_ARTIFACT_TYPES as readonly string[]).includes(artifactType);
-}
+import {
+  executeSummarySave,
+  executeTaskComplete,
+} from "../tools/workflow-tool-executors.js";
 
 /**
  * Register an alias tool that shares the same execute function as its canonical counterpart.
@@ -286,63 +281,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
   // ─── gsd_summary_save (formerly gsd_save_summary) ──────────────────────
 
   const summarySaveExecute = async (_toolCallId: string, params: any, _signal: AbortSignal | undefined, _onUpdate: unknown, _ctx: unknown) => {
-    const dbAvailable = await ensureDbOpen();
-    if (!dbAvailable) {
-      return {
-        content: [{ type: "text" as const, text: "Error: GSD database is not available. Cannot save artifact." }],
-        details: { operation: "save_summary", error: "db_unavailable" } as any,
-      };
-    }
-    if (!isSupportedSummaryArtifactType(params.artifact_type)) {
-      return {
-        content: [{ type: "text" as const, text: `Error: Invalid artifact_type "${params.artifact_type}". Must be one of: ${SUPPORTED_SUMMARY_ARTIFACT_TYPES.join(", ")}` }],
-        details: { operation: "save_summary", error: "invalid_artifact_type" } as any,
-      };
-    }
-    const contextGuard = shouldBlockContextArtifactSave(
-      params.artifact_type,
-      params.milestone_id ?? null,
-      params.slice_id ?? null,
-    );
-    if (contextGuard.block) {
-      return {
-        content: [{ type: "text" as const, text: `Error saving artifact: ${contextGuard.reason ?? "context write blocked"}` }],
-        details: { operation: "save_summary", error: "context_write_blocked" } as any,
-      };
-    }
-    try {
-      let relativePath: string;
-      if (params.task_id && params.slice_id) {
-        relativePath = `milestones/${params.milestone_id}/slices/${params.slice_id}/tasks/${params.task_id}-${params.artifact_type}.md`;
-      } else if (params.slice_id) {
-        relativePath = `milestones/${params.milestone_id}/slices/${params.slice_id}/${params.slice_id}-${params.artifact_type}.md`;
-      } else {
-        relativePath = `milestones/${params.milestone_id}/${params.milestone_id}-${params.artifact_type}.md`;
-      }
-      const { saveArtifactToDb } = await import("../db-writer.js");
-      await saveArtifactToDb(
-        {
-          path: relativePath,
-          artifact_type: params.artifact_type,
-          content: params.content,
-          milestone_id: params.milestone_id,
-          slice_id: params.slice_id,
-          task_id: params.task_id,
-        },
-        process.cwd(),
-      );
-      return {
-        content: [{ type: "text" as const, text: `Saved ${params.artifact_type} artifact to ${relativePath}` }],
-        details: { operation: "save_summary", path: relativePath, artifact_type: params.artifact_type } as any,
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logError("tool", `gsd_summary_save tool failed: ${msg}`, { tool: "gsd_summary_save", error: String(err) });
-      return {
-        content: [{ type: "text" as const, text: `Error saving artifact: ${msg}` }],
-        details: { operation: "save_summary", error: msg } as any,
-      };
-    }
+    return executeSummarySave(params, process.cwd());
   };
 
   const summarySaveTool = {
@@ -717,46 +656,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
   // ─── gsd_task_complete (gsd_complete_task alias) ────────────────────────
 
   const taskCompleteExecute = async (_toolCallId: string, params: any, _signal: AbortSignal | undefined, _onUpdate: unknown, _ctx: unknown) => {
-    const dbAvailable = await ensureDbOpen();
-    if (!dbAvailable) {
-      return {
-        content: [{ type: "text" as const, text: "Error: GSD database is not available. Cannot complete task." }],
-        details: { operation: "complete_task", error: "db_unavailable" } as any,
-      };
-    }
-    try {
-      // Coerce string items to objects for verificationEvidence (#3541).
-      const coerced = { ...params };
-      coerced.verificationEvidence = (params.verificationEvidence ?? []).map((v: any) =>
-        typeof v === "string" ? { command: v, exitCode: -1, verdict: "unknown (coerced from string)", durationMs: 0 } : v,
-      );
-
-      const { handleCompleteTask } = await import("../tools/complete-task.js");
-      const result = await handleCompleteTask(coerced, process.cwd());
-      if ("error" in result) {
-        return {
-          content: [{ type: "text" as const, text: `Error completing task: ${result.error}` }],
-          details: { operation: "complete_task", error: result.error } as any,
-        };
-      }
-      return {
-        content: [{ type: "text" as const, text: `Completed task ${result.taskId} (${result.sliceId}/${result.milestoneId})` }],
-        details: {
-          operation: "complete_task",
-          taskId: result.taskId,
-          sliceId: result.sliceId,
-          milestoneId: result.milestoneId,
-          summaryPath: result.summaryPath,
-        } as any,
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logError("tool", `complete_task tool failed: ${msg}`, { tool: "gsd_task_complete", error: String(err) });
-      return {
-        content: [{ type: "text" as const, text: `Error completing task: ${msg}` }],
-        details: { operation: "complete_task", error: msg } as any,
-      };
-    }
+    return executeTaskComplete(params, process.cwd());
   };
 
   const taskCompleteTool = {

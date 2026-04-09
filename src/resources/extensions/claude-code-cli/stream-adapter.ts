@@ -18,6 +18,7 @@ import type {
 import { EventStream } from "@gsd/pi-ai";
 import { execSync } from "node:child_process";
 import { PartialMessageBuilder, ZERO_USAGE, mapUsage } from "./partial-builder.js";
+import { buildWorkflowMcpServers } from "../gsd/workflow-mcp.js";
 import type {
 	SDKAssistantMessage,
 	SDKMessage,
@@ -163,6 +164,7 @@ export function makeStreamExhaustedErrorMessage(model: string, lastTextContent: 
  * beta flags, and other configuration without mocking the full SDK.
  */
 export function buildSdkOptions(modelId: string, prompt: string): Record<string, unknown> {
+	const mcpServers = buildWorkflowMcpServers();
 	return {
 		pathToClaudeCodeExecutable: getClaudePath(),
 		model: modelId,
@@ -173,6 +175,7 @@ export function buildSdkOptions(modelId: string, prompt: string): Record<string,
 		allowDangerouslySkipPermissions: true,
 		settingSources: ["project"],
 		systemPrompt: { type: "preset", preset: "claude_code" },
+		...(mcpServers ? { mcpServers } : {}),
 		betas: modelId.includes("sonnet") ? ["context-1m-2025-08-07"] : [],
 	};
 }

@@ -3,6 +3,7 @@
  *
  * Session tools (6): gsd_execute, gsd_status, gsd_result, gsd_cancel, gsd_query, gsd_resolve_blocker
  * Read-only tools (6): gsd_progress, gsd_roadmap, gsd_history, gsd_doctor, gsd_captures, gsd_knowledge
+ * Workflow tools (3): gsd_summary_save, gsd_task_complete, gsd_milestone_status
  *
  * Uses dynamic imports for @modelcontextprotocol/sdk because TS Node16
  * cannot resolve the SDK's subpath exports statically (same pattern as
@@ -19,6 +20,7 @@ import { readHistory } from './readers/metrics.js';
 import { readCaptures } from './readers/captures.js';
 import { readKnowledge } from './readers/knowledge.js';
 import { runDoctorLite } from './readers/doctor-lite.js';
+import { registerWorkflowTools } from './workflow-tools.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -404,6 +406,8 @@ export async function createMcpServer(sessionManager: SessionManager): Promise<{
       }
     },
   );
+
+  registerWorkflowTools(server);
 
   return { server };
 }
