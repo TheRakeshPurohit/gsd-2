@@ -155,7 +155,7 @@ jobs:
         run: npm run test:coverage
 
   windows-portability:
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: detect-changes
     if: >-
       needs.detect-changes.outputs.docs-only != 'true'
@@ -180,11 +180,17 @@ jobs:
       - name: Typecheck extensions
         run: npm run typecheck:extensions
 
+      - name: Validate package is installable
+        run: npm run validate-pack
+
       - name: Run unit tests
         run: npm run test:unit
 
       - name: Run package tests
         run: npm run test:packages
+
+      - name: Run integration tests
+        run: npm run test:integration
 
   rtk-portability:
     timeout-minutes: 20

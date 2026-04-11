@@ -20,6 +20,8 @@ import { resolve } from "node:path";
 import type { TaskRow } from "./gsd-db.ts";
 import type { PreExecutionCheckJSON } from "./verification-evidence.ts";
 
+const NPM_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
+
 // ─── Result Types ────────────────────────────────────────────────────────────
 
 export interface PreExecutionResult {
@@ -126,9 +128,10 @@ async function checkPackageOnNpm(
   timeoutMs = 5000
 ): Promise<{ exists: boolean; error?: string }> {
   return new Promise((resolve) => {
-    const child = spawn("npm", ["view", packageName, "name"], {
+    const child = spawn(NPM_COMMAND, ["view", packageName, "name"], {
       stdio: ["ignore", "pipe", "pipe"],
       timeout: timeoutMs,
+      shell: process.platform === "win32",
     });
 
     let stdout = "";
