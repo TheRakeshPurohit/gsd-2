@@ -380,6 +380,15 @@ export async function handleAgentEvent(host: InteractiveModeStateHost & {
 				}
 				host.streamingComponent = undefined;
 				host.streamingMessage = undefined;
+				// Clear pinned output once the message is finalized in the chat
+				// container — prevents duplicate display when the agent continues
+				// (e.g. form elicitation) after the assistant message ends.
+				if (pinnedBorder) pinnedBorder.stopSpinner();
+				host.pinnedMessageContainer.clear();
+				lastPinnedText = "";
+				hasToolsInTurn = false;
+				pinnedBorder = undefined;
+				pinnedTextComponent = undefined;
 				host.footer.invalidate();
 			}
 			host.ui.requestRender();
