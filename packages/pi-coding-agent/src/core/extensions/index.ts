@@ -2,6 +2,10 @@
  * Extension system for lifecycle events and custom tools.
  */
 
+export type { ExtensionManifest } from "./extension-manifest.js";
+export { readManifest, readManifestFromEntryPath } from "./extension-manifest.js";
+export type { SortResult, SortWarning } from "./extension-sort.js";
+export { sortExtensionPaths } from "./extension-sort.js";
 export type { SlashCommandInfo, SlashCommandLocation, SlashCommandSource } from "../slash-commands.js";
 export {
 	createExtensionRuntime,
@@ -39,6 +43,9 @@ export type {
 	BeforeProviderRequestEventResult,
 	// Context
 	CompactOptions,
+	// Events - Adjust Tool Set (ADR-005)
+	AdjustToolSetEvent,
+	AdjustToolSetResult,
 	// Events - Agent
 	ContextEvent,
 	// Event Results
@@ -131,6 +138,7 @@ export type {
 	ToolCallEvent,
 	ToolCallEventResult,
 	// Tools
+	ToolCompatibility,
 	ToolDefinition,
 	// Events - Tool Execution
 	ToolExecutionEndEvent,

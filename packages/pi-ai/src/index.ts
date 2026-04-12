@@ -12,7 +12,10 @@ export * from "./providers/google-vertex.js";
 export * from "./providers/mistral.js";
 export * from "./providers/openai-completions.js";
 export * from "./providers/openai-responses.js";
+export * from "./providers/provider-capabilities.js";
 export * from "./providers/register-builtins.js";
+export type { ProviderSwitchReport } from "./providers/transform-messages.js";
+export { createEmptyReport, hasTransformations, transformMessagesWithReport } from "./providers/transform-messages.js";
 export * from "./stream.js";
 export * from "./types.js";
 export * from "./utils/event-stream.js";
@@ -27,4 +30,5 @@ export type {
 } from "./utils/oauth/types.js";
 export * from "./utils/overflow.js";
 export * from "./utils/typebox-helpers.js";
+export * from "./utils/repair-tool-json.js";
 export * from "./utils/validation.js";

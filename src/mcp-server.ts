@@ -19,6 +19,10 @@ export interface McpToolDef {
 // MCP SDK subpath imports use wildcard exports (./*) that NodeNext resolves
 // at runtime but TypeScript cannot statically type-check. We construct the
 // specifiers dynamically so tsc treats them as `any`.
+//
+// Use explicit .js subpaths for modules that are loaded dynamically at runtime.
+// Recent Node / SDK combinations do not reliably resolve the extensionless
+// wildcard targets for `server/stdio` and `types` (#3914).
 const MCP_PKG = '@modelcontextprotocol/sdk'
 
 /**
@@ -42,8 +46,8 @@ export async function startMcpServer(options: {
   const { tools, version = '0.0.0' } = options
 
   const serverMod = await import(`${MCP_PKG}/server`)
-  const stdioMod = await import(`${MCP_PKG}/server/stdio`)
-  const typesMod = await import(`${MCP_PKG}/types`)
+  const stdioMod = await import(`${MCP_PKG}/server/stdio.js`)
+  const typesMod = await import(`${MCP_PKG}/types.js`)
 
   const Server = serverMod.Server
   const StdioServerTransport = stdioMod.StdioServerTransport

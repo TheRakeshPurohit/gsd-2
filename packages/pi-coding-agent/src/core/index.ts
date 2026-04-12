@@ -29,6 +29,7 @@ export {
 	type ExecResult,
 	type Extension,
 	type ExtensionAPI,
+	type ExtensionManifest,
 	type ExtensionCommandContext,
 	type ExtensionContext,
 	type ExtensionError,
@@ -53,6 +54,11 @@ export {
 	type SessionSwitchEvent,
 	type SessionTreeEvent,
 	type ToolCallEvent,
+	readManifest,
+	readManifestFromEntryPath,
+	type SortResult,
+	type SortWarning,
+	sortExtensionPaths,
 	type ToolDefinition,
 	type ToolRenderResultOptions,
 	type ToolResultEvent,
@@ -60,3 +66,5 @@ export {
 	type TurnStartEvent,
 	wrapToolsWithExtensions,
 } from "./extensions/index.js";
+
+export { ContextualTips, type TipContext } from "./contextual-tips.js";
