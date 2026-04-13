@@ -474,7 +474,10 @@ export async function findInitialModel(options: {
 
 	// 3. Try saved default from settings — use it exactly as configured.
 	// Whatever the user chose is what gets used; no silent substitution.
-	if (defaultProvider && defaultModelId) {
+	// Skip the saved default if its provider is not request-ready (no auth
+	// available) so we fall through to an actually-usable model instead of
+	// returning a stale selection every selector surface would display.
+	if (defaultProvider && defaultModelId && modelRegistry.isProviderRequestReady(defaultProvider)) {
 		const found = modelRegistry.find(defaultProvider, defaultModelId);
 		if (found) {
 			model = found;
