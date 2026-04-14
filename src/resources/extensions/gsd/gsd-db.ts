@@ -967,7 +967,16 @@ export function readTransaction<T>(fn: () => T): T {
     currentDb.exec("COMMIT");
     return result;
   } catch (err) {
-    try { currentDb.exec("ROLLBACK"); } catch { /* swallow */ }
+    try {
+      currentDb.exec("ROLLBACK");
+    } catch (rollbackErr) {
+      // A failed ROLLBACK after a failed read is a split-brain signal —
+      // the transaction is in an indeterminate state. Surface it via the
+      // logger instead of swallowing it.
+      logError("db", "snapshotState ROLLBACK failed", {
+        error: (rollbackErr as Error).message,
+      });
+    }
     throw err;
   } finally {
     _txDepth--;

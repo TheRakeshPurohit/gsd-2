@@ -30,7 +30,15 @@ import { MergeConflictError } from "../git-service.js";
 import { setCurrentPhase, clearCurrentPhase } from "../../shared/gsd-phase-state.js";
 import { join, basename, dirname, parse as parsePath } from "node:path";
 import { existsSync, cpSync, readdirSync } from "node:fs";
-import { logWarning, logError } from "../workflow-logger.js";
+import {
+  logWarning,
+  logError,
+  _resetLogs,
+  drainLogs,
+  drainAndSummarize,
+  formatForNotification,
+  hasAnyIssues,
+} from "../workflow-logger.js";
 import { gsdRoot } from "../paths.js";
 import { atomicWriteSync } from "../atomic-write.js";
 import { verifyExpectedArtifact, diagnoseExpectedArtifact, buildLoopRemediationSteps } from "../auto-recovery.js";
@@ -1081,6 +1089,10 @@ export async function runUnitPhase(
   );
   const previousTier = s.currentUnitRouting?.tier;
 
+  // Scope workflow-logger buffer to this unit so post-finalize drains are
+  // per-unit. Without this, the module-level _buffer accumulates across every
+  // unit in the same Node process (see workflow-logger.ts module header).
+  _resetLogs();
   s.currentUnit = { type: unitType, id: unitId, startedAt: Date.now() };
   setCurrentPhase(unitType);
   s.lastToolInvocationError = null; // #2883: clear stale error from previous unit
@@ -1545,6 +1557,9 @@ export async function runFinalize(
     // cannot mutate state for the next unit (#3757).
     s.currentUnit = null;
     clearCurrentPhase();
+    // Drop any logger entries from the timed-out unit so they don't bleed
+    // into the next iteration's drain.
+    drainLogs();
     loopState.consecutiveFinalizeTimeouts++;
     debugLog("autoLoop", {
       phase: "pre-verification-timeout",
@@ -1643,6 +1658,9 @@ export async function runFinalize(
     // cannot mutate state for the next unit (#3757).
     s.currentUnit = null;
     clearCurrentPhase();
+    // Drop any logger entries from the timed-out unit so they don't bleed
+    // into the next iteration's drain.
+    drainLogs();
     loopState.consecutiveFinalizeTimeouts++;
     debugLog("autoLoop", {
       phase: "post-verification-timeout",
@@ -1686,6 +1704,17 @@ export async function runFinalize(
 
   // Both pre and post verification completed without timeout — reset counter
   loopState.consecutiveFinalizeTimeouts = 0;
+
+  // Surface accumulated workflow-logger issues for this unit to the user.
+  // Warnings/errors logged during the unit are buffered in the logger and
+  // drained here so the user sees a single consolidated post-unit alert.
+  if (hasAnyIssues()) {
+    const { logs } = drainAndSummarize();
+    if (logs.length > 0) {
+      const severity = logs.some((e) => e.severity === "error") ? "error" : "warning";
+      ctx.ui.notify(formatForNotification(logs), severity);
+    }
+  }
 
   return { action: "next", data: undefined as void };
 }

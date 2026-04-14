@@ -345,8 +345,15 @@ function reconcileDiskToDb(basePath: string): MilestoneRow[] {
     const dbSliceIds = new Set(dbSlices.map(s => s.id));
 
     let roadmapContent: string;
-    try { roadmapContent = readFileSync(roadmapPath, "utf-8"); }
-    catch { continue; }
+    try {
+      roadmapContent = readFileSync(roadmapPath, "utf-8");
+    } catch (err) {
+      logWarning("state", "reconcileDiskToDb: roadmap read failed, skipping milestone", {
+        mid,
+        error: (err as Error).message,
+      });
+      continue;
+    }
 
     const parsed = parseRoadmap(roadmapContent);
     for (const s of parsed.slices) {

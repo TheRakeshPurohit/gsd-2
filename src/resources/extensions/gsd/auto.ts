@@ -1400,6 +1400,11 @@ export async function startAuto(
     s.stepMode = requestedStepMode;
     s.cmdCtx = ctx;
     s.basePath = base;
+    // Ensure the workflow-logger audit log is pinned to the project root
+    // even when auto-mode is entered via a path that bypasses the
+    // bootstrap/dynamic-tools ensureDbOpen() → setLogBasePath() chain
+    // (e.g. /clear resume, hot-reload).
+    setLogBasePath(base);
     s.unitDispatchCount.clear();
     s.unitLifetimeDispatches.clear();
     if (!getLedger()) initMetrics(base);
