@@ -813,3 +813,83 @@ test("chat-controller updates pinned zone after sub-turn shrink", async () => {
 	// Finalize so the module-level pinned spinner (setInterval) is torn down and the test process can exit.
 	await handleAgentEvent(host, { type: "message_end", message: makeAssistant([{ type: "text", text: "second" }, t2]) } as any);
 });
+
+test("chat-controller: agent_end without message_end must not remove streaming component from DOM (regression #4197)", async () => {
+	const host = createHost();
+
+	await handleAgentEvent(host, {
+		type: "message_start",
+		message: makeAssistant([]),
+	} as any);
+
+	// Simulate partial streaming that creates an AssistantMessageComponent
+	await handleAgentEvent(host, {
+		type: "message_update",
+		message: makeAssistant([{ type: "text", text: "partial answer" }]),
+		assistantMessageEvent: {
+			type: "text_delta",
+			contentIndex: 0,
+			delta: "partial answer",
+			partial: makeAssistant([{ type: "text", text: "partial answer" }]),
+		},
+	} as any);
+
+	// Precondition: component is in DOM
+	assert.equal(
+		host.chatContainer.children.length,
+		1,
+		"streaming component must be in DOM after message_update",
+	);
+	const comp = host.chatContainer.children[0];
+
+	// Simulate abort: agent_end fires WITHOUT message_end
+	await handleAgentEvent(host, { type: "agent_end" } as any);
+
+	assert.equal(
+		host.chatContainer.children.length,
+		1,
+		"agent_end must NOT remove the streaming component from the DOM (issue #4197)",
+	);
+	assert.equal(
+		host.chatContainer.children[0],
+		comp,
+		"the same component instance must remain in the DOM after agent_end",
+	);
+});
+
+test("chat-controller: agent_end after message_end must not alter DOM", async () => {
+	const host = createHost();
+	const content = [{ type: "text", text: "complete answer" }];
+
+	await handleAgentEvent(host, {
+		type: "message_start",
+		message: makeAssistant([]),
+	} as any);
+
+	await handleAgentEvent(host, {
+		type: "message_update",
+		message: makeAssistant(content),
+		assistantMessageEvent: {
+			type: "text_delta",
+			contentIndex: 0,
+			delta: "complete answer",
+			partial: makeAssistant(content),
+		},
+	} as any);
+
+	await handleAgentEvent(host, {
+		type: "message_end",
+		message: makeAssistant(content),
+	} as any);
+
+	const countAfterMessageEnd = host.chatContainer.children.length;
+	assert.ok(countAfterMessageEnd > 0, "component must be present after message_end");
+
+	await handleAgentEvent(host, { type: "agent_end" } as any);
+
+	assert.equal(
+		host.chatContainer.children.length,
+		countAfterMessageEnd,
+		"agent_end after message_end must not add or remove DOM nodes",
+	);
+});
