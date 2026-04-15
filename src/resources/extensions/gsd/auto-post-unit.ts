@@ -66,6 +66,8 @@ import { getSliceTasks } from "./gsd-db.js";
 import { runPreExecutionChecks, type PreExecutionResult } from "./pre-execution-checks.js";
 import { writePreExecutionEvidence } from "./verification-evidence.js";
 import { ensureCodebaseMapFresh } from "./codebase-generator.js";
+import { resolveUokFlags } from "./uok/flags.js";
+import { UokGateRunner } from "./uok/gate-runner.js";
 
 /** Maximum verification retry attempts before escalating to blocker placeholder (#2653). */
 const MAX_VERIFICATION_RETRIES = 3;
@@ -871,9 +873,10 @@ export async function postUnitPostVerification(pctx: PostUnitContext): Promise<"
   ) {
     let preExecPauseNeeded = false;
     await runSafely("postUnitPostVerification", "pre-execution-checks", async () => {
+      const prefs = loadEffectiveGSDPreferences()?.preferences;
+      const uokFlags = resolveUokFlags(prefs);
       try {
         // Check preferences — respect enhanced_verification and enhanced_verification_pre
-        const prefs = loadEffectiveGSDPreferences()?.preferences;
         const enhancedEnabled = prefs?.enhanced_verification !== false; // default true
         const preEnabled = prefs?.enhanced_verification_pre !== false;  // default true
 
@@ -908,6 +911,8 @@ export async function postUnitPostVerification(pctx: PostUnitContext): Promise<"
           return;
         }
 
+        const strictMode = prefs?.enhanced_verification_strict === true;
+
         // Run pre-execution checks
         const result: PreExecutionResult = await runPreExecutionChecks(tasks, s.basePath);
 
@@ -929,6 +934,36 @@ export async function postUnitPostVerification(pctx: PostUnitContext): Promise<"
         const slicePath = resolveSlicePath(s.basePath, mid, sid);
         if (slicePath) {
           writePreExecutionEvidence(result, slicePath, mid, sid);
+        }
+
+        if (uokFlags.gates) {
+          const failedChecks = result.checks
+            .filter((check) => !check.passed)
+            .map((check) => `[${check.category}] ${check.target}: ${check.message}`);
+          const warnEscalated = result.status === "warn" && strictMode;
+          const blockingFailure = result.status === "fail" || warnEscalated;
+          const gateRunner = new UokGateRunner();
+          gateRunner.register({
+            id: "pre-execution-checks",
+            type: "input",
+            execute: async () => ({
+              outcome: blockingFailure ? "fail" : "pass",
+              failureClass: result.status === "fail" ? "input" : warnEscalated ? "policy" : "none",
+              rationale: blockingFailure
+                ? `pre-execution checks ${result.status}${warnEscalated ? " (strict)" : ""}`
+                : "pre-execution checks passed",
+              findings: failedChecks.join("\n"),
+            }),
+          });
+          await gateRunner.run("pre-execution-checks", {
+            basePath: s.basePath,
+            traceId: `pre-execution:${s.currentUnit.id}`,
+            turnId: s.currentUnit.id,
+            milestoneId: mid,
+            sliceId: sid,
+            unitType: s.currentUnit.type,
+            unitId: s.currentUnit.id,
+          });
         }
 
         // Notify UI
@@ -969,6 +1004,29 @@ export async function postUnitPostVerification(pctx: PostUnitContext): Promise<"
           `Pre-execution checks error: ${errorMessage} — pausing for human review`,
           "error",
         );
+        if (uokFlags.gates && s.currentUnit) {
+          const { milestone: mid, slice: sid } = parseUnitId(s.currentUnit.id);
+          const gateRunner = new UokGateRunner();
+          gateRunner.register({
+            id: "pre-execution-checks",
+            type: "input",
+            execute: async () => ({
+              outcome: "manual-attention",
+              failureClass: "manual-attention",
+              rationale: "pre-execution checks threw before completion",
+              findings: errorMessage,
+            }),
+          });
+          await gateRunner.run("pre-execution-checks", {
+            basePath: s.basePath,
+            traceId: `pre-execution:${s.currentUnit.id}`,
+            turnId: s.currentUnit.id,
+            milestoneId: mid ?? undefined,
+            sliceId: sid ?? undefined,
+            unitType: s.currentUnit.type,
+            unitId: s.currentUnit.id,
+          });
+        }
         preExecPauseNeeded = true;
       }
     });

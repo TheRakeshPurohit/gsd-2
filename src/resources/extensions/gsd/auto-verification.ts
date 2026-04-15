@@ -69,6 +69,37 @@ async function runValidateMilestonePostCheck(
   pauseAuto: (ctx?: ExtensionContext, pi?: ExtensionAPI) => Promise<void>,
 ): Promise<VerificationResult> {
   const { s, ctx, pi } = vctx;
+  const prefs = loadEffectiveGSDPreferences()?.preferences;
+  const uokFlags = resolveUokFlags(prefs);
+  const persistMilestoneValidationGate = async (
+    outcome: "pass" | "fail" | "retry" | "manual-attention",
+    failureClass: "none" | "verification" | "manual-attention",
+    rationale: string,
+    findings = "",
+    milestoneId?: string,
+  ): Promise<void> => {
+    if (!uokFlags.gates || !s.currentUnit) return;
+    const gateRunner = new UokGateRunner();
+    gateRunner.register({
+      id: "milestone-validation-post-check",
+      type: "verification",
+      execute: async () => ({
+        outcome,
+        failureClass,
+        rationale,
+        findings,
+      }),
+    });
+    await gateRunner.run("milestone-validation-post-check", {
+      basePath: s.basePath,
+      traceId: `validation-post-check:${s.currentUnit.id}`,
+      turnId: s.currentUnit.id,
+      milestoneId,
+      unitType: s.currentUnit.type,
+      unitId: s.currentUnit.id,
+    });
+  };
+
   if (!s.currentUnit) return "continue";
 
   const { milestone: mid } = parseUnitId(s.currentUnit.id);
@@ -81,14 +112,32 @@ async function runValidateMilestonePostCheck(
   if (!validationContent) return "continue";
 
   const verdict = extractVerdict(validationContent);
-  if (verdict !== "needs-remediation") return "continue";
+  if (verdict !== "needs-remediation") {
+    await persistMilestoneValidationGate(
+      "pass",
+      "none",
+      `milestone validation verdict is ${verdict}; no remediation loop risk`,
+      "",
+      mid,
+    );
+    return "continue";
+  }
 
   const incompleteSliceCount = await countIncompleteSlices(s.basePath, mid);
 
   // If any non-closed slices exist, the agent successfully queued remediation
   // work — proceed normally. The state machine will execute those slices and
   // re-validate per the #3596/#3670 fix.
-  if (incompleteSliceCount > 0) return "continue";
+  if (incompleteSliceCount > 0) {
+    await persistMilestoneValidationGate(
+      "pass",
+      "none",
+      `remediation slices present (${incompleteSliceCount}); validation can continue`,
+      "",
+      mid,
+    );
+    return "continue";
+  }
 
   ctx.ui.notify(
     `Milestone ${mid} validation returned verdict=needs-remediation but no remediation slices were added. Pausing for human review.`,
@@ -97,6 +146,13 @@ async function runValidateMilestonePostCheck(
   process.stderr.write(
     `validate-milestone: pausing — verdict=needs-remediation with no incomplete slices for ${mid}. ` +
       `The agent must call gsd_reassess_roadmap to add remediation slices before re-validation.\n`,
+  );
+  await persistMilestoneValidationGate(
+    "manual-attention",
+    "manual-attention",
+    "needs-remediation verdict without queued remediation slices",
+    `No incomplete slices found for ${mid} while verdict=needs-remediation`,
+    mid,
   );
   await pauseAuto(ctx, pi);
   return "pause";
@@ -370,6 +426,43 @@ export async function runPostUnitVerification(
               process.stderr.write(
                 `gsd-post-exec:   ${checkEmoji} [${check.category}] ${check.target}: ${check.message}\n`
               );
+            }
+
+            if (uokFlags.gates) {
+              const strictMode = prefs?.enhanced_verification_strict === true;
+              const warnEscalated = postExecResult.status === "warn" && strictMode;
+              const blockingFailure = postExecResult.status === "fail" || warnEscalated;
+              const findings = postExecResult.checks
+                .filter((check) => !check.passed)
+                .map((check) => `[${check.category}] ${check.target}: ${check.message}`)
+                .join("\n");
+              const gateRunner = new UokGateRunner();
+              gateRunner.register({
+                id: "post-execution-checks",
+                type: "artifact",
+                execute: async () => ({
+                  outcome: blockingFailure ? "fail" : "pass",
+                  failureClass: postExecResult.status === "fail"
+                    ? "artifact"
+                    : warnEscalated
+                      ? "policy"
+                      : "none",
+                  rationale: blockingFailure
+                    ? `post-execution checks ${postExecResult.status}${warnEscalated ? " (strict)" : ""}`
+                    : "post-execution checks passed",
+                  findings,
+                }),
+              });
+              await gateRunner.run("post-execution-checks", {
+                basePath: s.basePath,
+                traceId: `verification:${s.currentUnit.id}`,
+                turnId: s.currentUnit.id,
+                milestoneId: mid,
+                sliceId: sid,
+                taskId: tid,
+                unitType: s.currentUnit.type,
+                unitId: s.currentUnit.id,
+              });
             }
 
             // Check for blocking failures

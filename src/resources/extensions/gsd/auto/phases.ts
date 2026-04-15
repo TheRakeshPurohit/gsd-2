@@ -48,6 +48,8 @@ import { getEligibleSlices } from "../slice-parallel-eligibility.js";
 import { startSliceParallel } from "../slice-parallel-orchestrator.js";
 import { isDbAvailable, getMilestoneSlices } from "../gsd-db.js";
 import { ensurePlanV2Graph } from "../uok/plan-v2.js";
+import { resolveUokFlags } from "../uok/flags.js";
+import { UokGateRunner } from "../uok/gate-runner.js";
 import { resetEvidence } from "../safety/evidence-collector.js";
 import { createCheckpoint, cleanupCheckpoint, rollbackToCheckpoint } from "../safety/git-checkpoint.js";
 import { resolveSafetyHarnessConfig } from "../safety/safety-harness.js";
@@ -203,14 +205,60 @@ export async function runPreDispatch(
   loopState: LoopState,
 ): Promise<PhaseResult<PreDispatchData>> {
   const { ctx, pi, s, deps, prefs } = ic;
+  const uokFlags = resolveUokFlags(prefs);
+  const runPreDispatchGate = async (input: {
+    gateId: string;
+    gateType: string;
+    outcome: "pass" | "fail" | "retry" | "manual-attention";
+    failureClass: "none" | "policy" | "input" | "execution" | "artifact" | "verification" | "closeout" | "git" | "timeout" | "manual-attention" | "unknown";
+    rationale: string;
+    findings?: string;
+    milestoneId?: string;
+  }): Promise<void> => {
+    if (!uokFlags.gates) return;
+    const gateRunner = new UokGateRunner();
+    gateRunner.register({
+      id: input.gateId,
+      type: input.gateType,
+      execute: async () => ({
+        outcome: input.outcome,
+        failureClass: input.failureClass,
+        rationale: input.rationale,
+        findings: input.findings ?? "",
+      }),
+    });
+    await gateRunner.run(input.gateId, {
+      basePath: s.basePath,
+      traceId: `pre-dispatch:${ic.flowId}`,
+      turnId: `iter-${ic.iteration}`,
+      milestoneId: input.milestoneId ?? s.currentMilestoneId ?? undefined,
+      unitType: "pre-dispatch",
+      unitId: `iter-${ic.iteration}`,
+    });
+  };
 
   // Resource version guard
   const staleMsg = deps.checkResourcesStale(s.resourceVersionOnStart);
   if (staleMsg) {
+    await runPreDispatchGate({
+      gateId: "resource-version-guard",
+      gateType: "policy",
+      outcome: "fail",
+      failureClass: "policy",
+      rationale: "resource version guard blocked dispatch",
+      findings: staleMsg,
+    });
     await deps.stopAuto(ctx, pi, staleMsg);
     debugLog("autoLoop", { phase: "exit", reason: "resources-stale" });
     return { action: "break", reason: "resources-stale" };
   }
+  await runPreDispatchGate({
+    gateId: "resource-version-guard",
+    gateType: "policy",
+    outcome: "pass",
+    failureClass: "none",
+    rationale: "resource version guard passed",
+  });
 
   deps.invalidateAllCaches();
   s.lastPromptCharCount = undefined;
@@ -226,6 +274,14 @@ export async function runPreDispatch(
       );
     }
     if (!healthGate.proceed) {
+      await runPreDispatchGate({
+        gateId: "pre-dispatch-health-gate",
+        gateType: "execution",
+        outcome: "manual-attention",
+        failureClass: "manual-attention",
+        rationale: "pre-dispatch health gate blocked dispatch",
+        findings: healthGate.reason,
+      });
       ctx.ui.notify(
         healthGate.reason || "Pre-dispatch health check failed — run /gsd doctor for details.",
         "error",
@@ -234,7 +290,23 @@ export async function runPreDispatch(
       debugLog("autoLoop", { phase: "exit", reason: "health-gate-failed" });
       return { action: "break", reason: "health-gate-failed" };
     }
+    await runPreDispatchGate({
+      gateId: "pre-dispatch-health-gate",
+      gateType: "execution",
+      outcome: "pass",
+      failureClass: "none",
+      rationale: "pre-dispatch health gate passed",
+      findings: healthGate.fixesApplied.length > 0 ? healthGate.fixesApplied.join(", ") : "",
+    });
   } catch (e) {
+    await runPreDispatchGate({
+      gateId: "pre-dispatch-health-gate",
+      gateType: "execution",
+      outcome: "manual-attention",
+      failureClass: "manual-attention",
+      rationale: "pre-dispatch health gate threw unexpectedly",
+      findings: String(e),
+    });
     logWarning("engine", "Pre-dispatch health gate threw unexpectedly", { error: String(e) });
   }
 
@@ -257,10 +329,27 @@ export async function runPreDispatch(
     const compiled = ensurePlanV2Graph(s.basePath, state);
     if (!compiled.ok) {
       const reason = compiled.reason ?? "Plan v2 compilation failed";
+      await runPreDispatchGate({
+        gateId: "plan-v2-gate",
+        gateType: "policy",
+        outcome: "manual-attention",
+        failureClass: "manual-attention",
+        rationale: "plan v2 compile gate failed",
+        findings: reason,
+        milestoneId: state.activeMilestone?.id ?? undefined,
+      });
       ctx.ui.notify(`Plan gate failed-closed: ${reason}`, "error");
       await deps.pauseAuto(ctx, pi);
       return { action: "break", reason: "plan-v2-gate-failed" };
     }
+    await runPreDispatchGate({
+      gateId: "plan-v2-gate",
+      gateType: "policy",
+      outcome: "pass",
+      failureClass: "none",
+      rationale: "plan v2 compile gate passed",
+      milestoneId: state.activeMilestone?.id ?? undefined,
+    });
   }
   deps.syncCmuxSidebar(prefs, state);
   let mid = state.activeMilestone?.id;
