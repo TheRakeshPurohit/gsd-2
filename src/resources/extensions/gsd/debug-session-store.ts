@@ -20,6 +20,14 @@ export interface DebugTddGate {
   failureOutput?: string;
 }
 
+export interface DebugSpecialistReview {
+  hint: string;
+  skill: string | null;
+  verdict: string;
+  detail: string;
+  reviewedAt: number;
+}
+
 export interface DebugSessionArtifact {
   version: 1;
   mode: "debug" | "diagnose";
@@ -33,6 +41,7 @@ export interface DebugSessionArtifact {
   lastError: string | null;
   checkpoint?: DebugCheckpoint | null;
   tddGate?: DebugTddGate | null;
+  specialistReview?: DebugSpecialistReview | null;
 }
 
 export interface DebugSessionRecord {
@@ -66,6 +75,7 @@ export interface UpdateDebugSessionInput {
   updatedAt?: number;
   checkpoint?: DebugCheckpoint | null;
   tddGate?: DebugTddGate | null;
+  specialistReview?: DebugSpecialistReview | null;
 }
 
 export interface DebugSessionStoreDeps {
@@ -157,6 +167,18 @@ function isDebugTddGateShape(value: unknown): value is DebugTddGate {
   );
 }
 
+function isDebugSpecialistReviewShape(value: unknown): value is DebugSpecialistReview {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.hint === "string"
+    && (typeof o.skill === "string" || o.skill === null)
+    && typeof o.verdict === "string"
+    && typeof o.detail === "string"
+    && typeof o.reviewedAt === "number"
+  );
+}
+
 function isDebugSessionArtifact(value: unknown): value is DebugSessionArtifact {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
@@ -173,6 +195,7 @@ function isDebugSessionArtifact(value: unknown): value is DebugSessionArtifact {
     && (typeof o.lastError === "string" || o.lastError === null)
     && (o.checkpoint === undefined || o.checkpoint === null || isDebugCheckpointShape(o.checkpoint))
     && (o.tddGate === undefined || o.tddGate === null || isDebugTddGateShape(o.tddGate))
+    && (o.specialistReview === undefined || o.specialistReview === null || isDebugSpecialistReviewShape(o.specialistReview))
   );
 }
 
@@ -342,6 +365,7 @@ export function updateDebugSession(
     lastError: update.lastError === undefined ? loaded.session.lastError : update.lastError,
     checkpoint: update.checkpoint === undefined ? loaded.session.checkpoint : update.checkpoint,
     tddGate: update.tddGate === undefined ? loaded.session.tddGate : update.tddGate,
+    specialistReview: update.specialistReview === undefined ? loaded.session.specialistReview : update.specialistReview,
     updatedAt: nextUpdatedAt,
   };
 

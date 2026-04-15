@@ -14,6 +14,7 @@ import {
   slugifyDebugSessionIssue,
   updateDebugSession,
   type DebugCheckpoint,
+  type DebugSpecialistReview,
   type DebugTddGate,
 } from "../debug-session-store.ts";
 
@@ -375,6 +376,188 @@ describe("debug-session-store: checkpoint and tddGate fields", () => {
         () => loadDebugSession(base, "bad-tddgate"),
         /Malformed debug session artifact/,
       );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("debug-session-store: specialistReview field", () => {
+  test("specialistReview round-trip: update with review, load, verify all fields intact", () => {
+    const base = makeBase();
+    try {
+      createDebugSession(base, { issue: "Specialist review test" });
+
+      const specialistReview: DebugSpecialistReview = {
+        hint: "Check OAuth token expiry handling",
+        skill: "auth-specialist",
+        verdict: "SUGGEST_CHANGE (token refresh logic is missing)",
+        detail: "The access token is never refreshed before expiry, causing silent auth failures.",
+        reviewedAt: 1700000000,
+      };
+      updateDebugSession(base, "specialist-review-test", { specialistReview });
+
+      const loaded = loadDebugSession(base, "specialist-review-test");
+      assert.ok(loaded !== null);
+      assert.deepEqual(loaded.session.specialistReview, specialistReview);
+      assert.equal(loaded.session.specialistReview?.hint, "Check OAuth token expiry handling");
+      assert.equal(loaded.session.specialistReview?.skill, "auth-specialist");
+      assert.equal(loaded.session.specialistReview?.verdict, "SUGGEST_CHANGE (token refresh logic is missing)");
+      assert.equal(loaded.session.specialistReview?.reviewedAt, 1700000000);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("specialistReview null-clear: update with review then null clears it", () => {
+    const base = makeBase();
+    try {
+      createDebugSession(base, { issue: "Clear specialist review" });
+
+      const specialistReview: DebugSpecialistReview = {
+        hint: "Investigate DB connection pool",
+        skill: null,
+        verdict: "LOOKS_GOOD (no issue found)",
+        detail: "Connection pool is sized correctly for the load profile.",
+        reviewedAt: 1700000001,
+      };
+      updateDebugSession(base, "clear-specialist-review", { specialistReview });
+
+      const withReview = loadDebugSession(base, "clear-specialist-review");
+      assert.ok(withReview?.session.specialistReview !== null && withReview?.session.specialistReview !== undefined);
+
+      updateDebugSession(base, "clear-specialist-review", { specialistReview: null });
+
+      const cleared = loadDebugSession(base, "clear-specialist-review");
+      assert.ok(cleared !== null);
+      assert.equal(cleared.session.specialistReview, null);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("backward compat: existing artifact without specialistReview validates successfully", () => {
+    const base = makeBase();
+    try {
+      const sessionsDir = debugSessionsDir(base);
+      mkdirSync(sessionsDir, { recursive: true });
+      const artifact = {
+        version: 1,
+        mode: "debug",
+        slug: "legacy-no-specialist",
+        issue: "Legacy session without specialistReview",
+        status: "active",
+        phase: "queued",
+        createdAt: 1000,
+        updatedAt: 1000,
+        logPath: join(base, ".gsd", "debug", "legacy-no-specialist.log"),
+        lastError: null,
+      };
+      writeFileSync(join(sessionsDir, "legacy-no-specialist.json"), JSON.stringify(artifact, null, 2), "utf-8");
+
+      const loaded = loadDebugSession(base, "legacy-no-specialist");
+      assert.ok(loaded !== null, "legacy artifact should load successfully");
+      assert.equal(loaded.session.specialistReview, undefined);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("validator rejects specialistReview with missing required fields (empty object)", () => {
+    const base = makeBase();
+    try {
+      const sessionsDir = debugSessionsDir(base);
+      mkdirSync(sessionsDir, { recursive: true });
+      const artifact = {
+        version: 1,
+        mode: "debug",
+        slug: "bad-specialist-empty",
+        issue: "Bad specialist review",
+        status: "active",
+        phase: "queued",
+        createdAt: 1000,
+        updatedAt: 1000,
+        logPath: join(base, ".gsd", "debug", "bad-specialist-empty.log"),
+        lastError: null,
+        specialistReview: {},
+      };
+      writeFileSync(join(sessionsDir, "bad-specialist-empty.json"), JSON.stringify(artifact, null, 2), "utf-8");
+
+      assert.throws(
+        () => loadDebugSession(base, "bad-specialist-empty"),
+        /Malformed debug session artifact/,
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("validator rejects specialistReview with wrong field types (verdict as number, skill as number)", () => {
+    const base = makeBase();
+    try {
+      const sessionsDir = debugSessionsDir(base);
+      mkdirSync(sessionsDir, { recursive: true });
+      const artifact = {
+        version: 1,
+        mode: "debug",
+        slug: "bad-specialist-types",
+        issue: "Bad specialist types",
+        status: "active",
+        phase: "queued",
+        createdAt: 1000,
+        updatedAt: 1000,
+        logPath: join(base, ".gsd", "debug", "bad-specialist-types.log"),
+        lastError: null,
+        specialistReview: {
+          hint: "Check something",
+          skill: 42, // should be string|null
+          verdict: 1, // should be string
+          detail: "Some detail",
+          reviewedAt: 1700000000,
+        },
+      };
+      writeFileSync(join(sessionsDir, "bad-specialist-types.json"), JSON.stringify(artifact, null, 2), "utf-8");
+
+      assert.throws(
+        () => loadDebugSession(base, "bad-specialist-types"),
+        /Malformed debug session artifact/,
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("validator accepts specialistReview with extra unknown fields (forward compat)", () => {
+    const base = makeBase();
+    try {
+      const sessionsDir = debugSessionsDir(base);
+      mkdirSync(sessionsDir, { recursive: true });
+      const artifact = {
+        version: 1,
+        mode: "debug",
+        slug: "specialist-extra-fields",
+        issue: "Specialist with extra fields",
+        status: "active",
+        phase: "queued",
+        createdAt: 1000,
+        updatedAt: 1000,
+        logPath: join(base, ".gsd", "debug", "specialist-extra-fields.log"),
+        lastError: null,
+        specialistReview: {
+          hint: "Look at caching layer",
+          skill: null,
+          verdict: "LOOKS_GOOD (cache is correctly invalidated)",
+          detail: "TTL is set appropriately.",
+          reviewedAt: 1700000002,
+          unknownFutureField: "some-value", // extra field should be tolerated
+        },
+      };
+      writeFileSync(join(sessionsDir, "specialist-extra-fields.json"), JSON.stringify(artifact, null, 2), "utf-8");
+
+      const loaded = loadDebugSession(base, "specialist-extra-fields");
+      assert.ok(loaded !== null, "artifact with extra fields should load successfully");
+      assert.equal(loaded.session.specialistReview?.hint, "Look at caching layer");
+      assert.equal(loaded.session.specialistReview?.skill, null);
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
