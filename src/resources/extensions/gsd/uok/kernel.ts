@@ -36,6 +36,11 @@ function writeParityEvent(basePath: string, event: Record<string, unknown>): voi
   }
 }
 
+function resolveKernelPathLabel(flags: ReturnType<typeof resolveUokFlags>): "uok-wrapper" | "legacy-wrapper" | "legacy-fallback" {
+  if (flags.legacyFallback) return "legacy-fallback";
+  return flags.enabled ? "uok-wrapper" : "legacy-wrapper";
+}
+
 export async function runAutoLoopWithUok(args: RunAutoLoopWithUokArgs): Promise<void> {
   const { ctx, pi, s, deps, runLegacyLoop } = args;
   const prefs = deps.loadEffectiveGSDPreferences()?.preferences;
@@ -44,7 +49,7 @@ export async function runAutoLoopWithUok(args: RunAutoLoopWithUokArgs): Promise<
 
   writeParityEvent(s.basePath, {
     ts: new Date().toISOString(),
-    path: flags.enabled ? "uok-wrapper" : "legacy-wrapper",
+    path: resolveKernelPathLabel(flags),
     flags,
     phase: "enter",
   });
@@ -81,7 +86,7 @@ export async function runAutoLoopWithUok(args: RunAutoLoopWithUokArgs): Promise<
     await runLegacyLoop(ctx, pi, s, decoratedDeps);
     writeParityEvent(s.basePath, {
       ts: new Date().toISOString(),
-      path: flags.enabled ? "uok-wrapper" : "legacy-wrapper",
+      path: resolveKernelPathLabel(flags),
       flags,
       phase: "exit",
       status: "ok",
@@ -89,7 +94,7 @@ export async function runAutoLoopWithUok(args: RunAutoLoopWithUokArgs): Promise<
   } catch (err) {
     writeParityEvent(s.basePath, {
       ts: new Date().toISOString(),
-      path: flags.enabled ? "uok-wrapper" : "legacy-wrapper",
+      path: resolveKernelPathLabel(flags),
       flags,
       phase: "exit",
       status: "error",

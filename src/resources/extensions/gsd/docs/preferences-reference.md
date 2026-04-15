@@ -191,8 +191,10 @@ Setting `prefer_skills: []` does **not** disable skill discovery — it just mea
   - `hooks`: boolean — enable routing hooks. Default: `true`.
   - `capability_routing`: boolean — enable capability-profile scoring for model selection within a tier. Requires `enabled: true`. Default: `false`.
 
-- `uok`: Unified Orchestration Kernel controls (all flags default to `false` during migration). Keys:
-  - `enabled`: boolean — enable kernel wrappers and contract observers.
+- `uok`: Unified Orchestration Kernel controls. Keys:
+  - `enabled`: boolean — enable kernel wrappers and contract observers. Default: `true`.
+  - `legacy_fallback.enabled`: boolean — emergency release fallback that forces legacy orchestration behavior even when `uok.enabled` is `true`. Default: `false`.
+    - Runtime override: set `GSD_UOK_FORCE_LEGACY=1` (or `GSD_UOK_LEGACY_FALLBACK=1`) to force legacy behavior for the current process.
   - `gates.enabled`: boolean — route checks through the unified gate runner and persist `gate_runs`.
   - `model_policy.enabled`: boolean — enforce policy filtering before model capability scoring.
   - `execution_graph.enabled`: boolean — enable DAG scheduler facade/adapters for execution.

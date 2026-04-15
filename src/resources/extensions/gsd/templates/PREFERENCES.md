@@ -40,7 +40,9 @@ dynamic_routing:
   cross_provider:
   hooks:
 uok:
-  enabled: false
+  enabled: true
+  legacy_fallback:
+    enabled: false
   gates:
     enabled: false
   model_policy:

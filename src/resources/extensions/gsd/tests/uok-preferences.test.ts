@@ -7,6 +7,7 @@ test("uok preferences validate nested flags and turn_action", () => {
   const input = {
     uok: {
       enabled: true,
+      legacy_fallback: { enabled: false },
       gates: { enabled: true },
       model_policy: { enabled: true },
       execution_graph: { enabled: false },
@@ -23,6 +24,7 @@ test("uok preferences validate nested flags and turn_action", () => {
   const result = validatePreferences(input as never);
   assert.equal(result.errors.length, 0);
   assert.equal(result.preferences.uok?.enabled, true);
+  assert.equal(result.preferences.uok?.legacy_fallback?.enabled, false);
   assert.equal(result.preferences.uok?.gitops?.turn_action, "status-only");
   assert.equal(result.preferences.uok?.plan_v2?.enabled, true);
 });

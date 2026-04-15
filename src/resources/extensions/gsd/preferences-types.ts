@@ -213,6 +213,9 @@ export type UokTurnActionMode = "commit" | "snapshot" | "status-only";
 
 export interface UokPreferences {
   enabled?: boolean;
+  legacy_fallback?: {
+    enabled?: boolean;
+  };
   gates?: {
     enabled?: boolean;
   };

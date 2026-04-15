@@ -178,7 +178,7 @@ export function validatePreferences(preferences: GSDPreferences): {
       }
 
       const parseEnabledBlock = (
-        key: "gates" | "model_policy" | "execution_graph" | "audit_unified" | "plan_v2",
+        key: "legacy_fallback" | "gates" | "model_policy" | "execution_graph" | "audit_unified" | "plan_v2",
       ): void => {
         const value = raw[key];
         if (value === undefined) return;
@@ -201,6 +201,7 @@ export function validatePreferences(preferences: GSDPreferences): {
         }
       };
 
+      parseEnabledBlock("legacy_fallback");
       parseEnabledBlock("gates");
       parseEnabledBlock("model_policy");
       parseEnabledBlock("execution_graph");
@@ -243,6 +244,7 @@ export function validatePreferences(preferences: GSDPreferences): {
 
       const knownUokKeys = new Set([
         "enabled",
+        "legacy_fallback",
         "gates",
         "model_policy",
         "execution_graph",

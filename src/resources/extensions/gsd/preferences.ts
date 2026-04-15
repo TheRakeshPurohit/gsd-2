@@ -383,6 +383,9 @@ function mergePreferences(base: GSDPreferences, override: GSDPreferences): GSDPr
     uok: (base.uok || override.uok)
       ? {
           enabled: override.uok?.enabled ?? base.uok?.enabled,
+          legacy_fallback: (base.uok?.legacy_fallback || override.uok?.legacy_fallback)
+            ? { ...(base.uok?.legacy_fallback ?? {}), ...(override.uok?.legacy_fallback ?? {}) }
+            : undefined,
           gates: (base.uok?.gates || override.uok?.gates)
             ? { ...(base.uok?.gates ?? {}), ...(override.uok?.gates ?? {}) }
             : undefined,
