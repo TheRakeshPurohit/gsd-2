@@ -44,8 +44,8 @@ export interface MemoryCaptureParams {
   category: string;
   content: string;
   confidence?: number;
-  tags?: string[]; // accepted for forward-compat (Phase 2); ignored in P1
-  scope?: string;  // accepted for forward-compat (Phase 2); ignored in P1
+  tags?: string[];
+  scope?: string;
 }
 
 const VALID_CATEGORIES = new Set([
@@ -82,8 +82,10 @@ export function executeMemoryCapture(params: MemoryCaptureParams): ToolExecution
     };
   }
   const confidence = clampConfidence(params.confidence);
+  const scope = normalizeScope(params.scope);
+  const tags = normalizeTags(params.tags);
 
-  const id = createMemory({ category, content, confidence });
+  const id = createMemory({ category, content, confidence, scope, tags });
   if (!id) {
     return {
       content: [{ type: "text", text: "Error: failed to create memory." }],
@@ -94,8 +96,19 @@ export function executeMemoryCapture(params: MemoryCaptureParams): ToolExecution
 
   return {
     content: [{ type: "text", text: `Captured ${id} (${category}): ${content}` }],
-    details: { operation: "memory_capture", id, category, confidence },
+    details: { operation: "memory_capture", id, category, confidence, scope, tags },
   };
+}
+
+function normalizeScope(value: unknown): string {
+  if (typeof value !== "string") return "project";
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? "project" : trimmed;
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((t): t is string => typeof t === "string" && t.trim().length > 0).slice(0, 10);
 }
 
 function clampConfidence(value: unknown): number {
@@ -111,7 +124,8 @@ export interface MemoryQueryParams {
   query: string;
   k?: number;
   category?: string;
-  scope?: string; // ignored in P1 — see Phase 2
+  scope?: string;
+  tag?: string;
   include_superseded?: boolean;
   reinforce_hits?: boolean;
 }
@@ -133,6 +147,8 @@ export function executeMemoryQuery(params: MemoryQueryParams): ToolExecutionResu
   const k = clampTopK(params.k, 10);
   const includeSuperseded = params.include_superseded === true;
   const category = params.category?.trim().toLowerCase() || null;
+  const scopeFilter = params.scope?.trim() || null;
+  const tagFilter = params.tag?.trim().toLowerCase() || null;
 
   const terms = tokenizeQuery(query);
   const hits: MemoryQueryHit[] = [];
@@ -143,6 +159,8 @@ export function executeMemoryQuery(params: MemoryQueryParams): ToolExecutionResu
 
     for (const m of candidates) {
       if (category && m.category.toLowerCase() !== category) continue;
+      if (scopeFilter && m.scope !== scopeFilter) continue;
+      if (tagFilter && !m.tags.map((t) => t.toLowerCase()).includes(tagFilter)) continue;
       const matchScore = terms.length === 0 ? 1 : keywordScore(m.content, terms);
       if (terms.length > 0 && matchScore === 0) continue;
       const rankScore = m.confidence * (1 + m.hit_count * 0.1);
@@ -217,19 +235,32 @@ function includeSupersededMemories(rankedActive: Memory[]): Memory[] {
   if (!adapter) return rankedActive;
   try {
     const rows = adapter.prepare("SELECT * FROM memories").all();
-    return rows.map((row) => ({
-      seq: row["seq"] as number,
-      id: row["id"] as string,
-      category: row["category"] as string,
-      content: row["content"] as string,
-      confidence: row["confidence"] as number,
-      source_unit_type: (row["source_unit_type"] as string) ?? null,
-      source_unit_id: (row["source_unit_id"] as string) ?? null,
-      created_at: row["created_at"] as string,
-      updated_at: row["updated_at"] as string,
-      superseded_by: (row["superseded_by"] as string) ?? null,
-      hit_count: row["hit_count"] as number,
-    }));
+    return rows.map((row) => {
+      let tags: string[] = [];
+      if (typeof row["tags"] === "string") {
+        try {
+          const parsed = JSON.parse(row["tags"] as string);
+          if (Array.isArray(parsed)) tags = parsed.filter((t): t is string => typeof t === "string");
+        } catch {
+          /* leave empty */
+        }
+      }
+      return {
+        seq: row["seq"] as number,
+        id: row["id"] as string,
+        category: row["category"] as string,
+        content: row["content"] as string,
+        confidence: row["confidence"] as number,
+        source_unit_type: (row["source_unit_type"] as string) ?? null,
+        source_unit_id: (row["source_unit_id"] as string) ?? null,
+        created_at: row["created_at"] as string,
+        updated_at: row["updated_at"] as string,
+        superseded_by: (row["superseded_by"] as string) ?? null,
+        hit_count: row["hit_count"] as number,
+        scope: (row["scope"] as string) ?? "project",
+        tags,
+      };
+    });
   } catch {
     return rankedActive;
   }

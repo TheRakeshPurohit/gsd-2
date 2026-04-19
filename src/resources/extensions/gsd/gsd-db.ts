@@ -180,7 +180,7 @@ function openRawDb(path: string): unknown {
   return new Database(path);
 }
 
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 
 function indexExists(db: DbAdapter, name: string): boolean {
   return !!db.prepare(
@@ -281,7 +281,9 @@ function initSchema(db: DbAdapter, fileBacked: boolean): void {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         superseded_by TEXT DEFAULT NULL,
-        hit_count INTEGER NOT NULL DEFAULT 0
+        hit_count INTEGER NOT NULL DEFAULT 0,
+        scope TEXT NOT NULL DEFAULT 'project',
+        tags TEXT NOT NULL DEFAULT '[]'
       )
     `);
 
@@ -290,6 +292,20 @@ function initSchema(db: DbAdapter, fileBacked: boolean): void {
         unit_key TEXT PRIMARY KEY,
         activity_file TEXT,
         processed_at TEXT NOT NULL
+      )
+    `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS memory_sources (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        uri TEXT,
+        title TEXT,
+        content TEXT NOT NULL,
+        content_hash TEXT NOT NULL UNIQUE,
+        imported_at TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'project',
+        tags TEXT NOT NULL DEFAULT '[]'
       )
     `);
 
@@ -516,6 +532,9 @@ function initSchema(db: DbAdapter, fileBacked: boolean): void {
     `);
 
     db.exec("CREATE INDEX IF NOT EXISTS idx_memories_active ON memories(superseded_by)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_memory_sources_kind ON memory_sources(kind)");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_memory_sources_scope ON memory_sources(scope)");
     db.exec("CREATE INDEX IF NOT EXISTS idx_replan_history_milestone ON replan_history(milestone_id, created_at)");
 
     // v13 indexes — hot-path dispatch queries
@@ -984,6 +1003,33 @@ function migrateSchema(db: DbAdapter): void {
       db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_escalation_pending ON tasks(milestone_id, slice_id, escalation_pending)");
       db.prepare("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)").run({
         ":version": 17,
+        ":applied_at": new Date().toISOString(),
+      });
+    }
+
+    if (currentVersion < 18) {
+      // Memory system Phase 2: scope + tags on memories, plus memory_sources
+      // table for raw ingested content (notes, files, URLs, artifacts).
+      ensureColumn(db, "memories", "scope", `ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'project'`);
+      ensureColumn(db, "memories", "tags", `ALTER TABLE memories ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_sources (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          uri TEXT,
+          title TEXT,
+          content TEXT NOT NULL,
+          content_hash TEXT NOT NULL UNIQUE,
+          imported_at TEXT NOT NULL,
+          scope TEXT NOT NULL DEFAULT 'project',
+          tags TEXT NOT NULL DEFAULT '[]'
+        )
+      `);
+      db.exec("CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_memory_sources_kind ON memory_sources(kind)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_memory_sources_scope ON memory_sources(scope)");
+      db.prepare("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)").run({
+        ":version": 18,
         ":applied_at": new Date().toISOString(),
       });
     }
@@ -3415,11 +3461,13 @@ export function insertMemoryRow(args: {
   sourceUnitId: string | null;
   createdAt: string;
   updatedAt: string;
+  scope?: string;
+  tags?: string[];
 }): void {
   if (!currentDb) throw new GSDError(GSD_STALE_STATE, "gsd-db: No database open");
   currentDb.prepare(
-    `INSERT INTO memories (id, category, content, confidence, source_unit_type, source_unit_id, created_at, updated_at)
-     VALUES (:id, :category, :content, :confidence, :source_unit_type, :source_unit_id, :created_at, :updated_at)`,
+    `INSERT INTO memories (id, category, content, confidence, source_unit_type, source_unit_id, created_at, updated_at, scope, tags)
+     VALUES (:id, :category, :content, :confidence, :source_unit_type, :source_unit_id, :created_at, :updated_at, :scope, :tags)`,
   ).run({
     ":id": args.id,
     ":category": args.category,
@@ -3429,7 +3477,45 @@ export function insertMemoryRow(args: {
     ":source_unit_id": args.sourceUnitId,
     ":created_at": args.createdAt,
     ":updated_at": args.updatedAt,
+    ":scope": args.scope ?? "project",
+    ":tags": JSON.stringify(args.tags ?? []),
   });
+}
+
+export function insertMemorySourceRow(args: {
+  id: string;
+  kind: string;
+  uri: string | null;
+  title: string | null;
+  content: string;
+  contentHash: string;
+  importedAt: string;
+  scope?: string;
+  tags?: string[];
+}): void {
+  if (!currentDb) throw new GSDError(GSD_STALE_STATE, "gsd-db: No database open");
+  currentDb.prepare(
+    `INSERT OR IGNORE INTO memory_sources (id, kind, uri, title, content, content_hash, imported_at, scope, tags)
+     VALUES (:id, :kind, :uri, :title, :content, :content_hash, :imported_at, :scope, :tags)`,
+  ).run({
+    ":id": args.id,
+    ":kind": args.kind,
+    ":uri": args.uri,
+    ":title": args.title,
+    ":content": args.content,
+    ":content_hash": args.contentHash,
+    ":imported_at": args.importedAt,
+    ":scope": args.scope ?? "project",
+    ":tags": JSON.stringify(args.tags ?? []),
+  });
+}
+
+export function deleteMemorySourceRow(id: string): boolean {
+  if (!currentDb) throw new GSDError(GSD_STALE_STATE, "gsd-db: No database open");
+  const res = currentDb
+    .prepare("DELETE FROM memory_sources WHERE id = :id")
+    .run({ ":id": id }) as { changes?: number };
+  return (res?.changes ?? 0) > 0;
 }
 
 export function rewriteMemoryId(placeholderId: string, realId: string): void {

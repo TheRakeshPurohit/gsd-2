@@ -31,6 +31,8 @@ export interface Memory {
   updated_at: string;
   superseded_by: string | null;
   hit_count: number;
+  scope: string;
+  tags: string[];
 }
 
 export type MemoryActionCreate = {
@@ -38,6 +40,8 @@ export type MemoryActionCreate = {
   category: string;
   content: string;
   confidence?: number;
+  scope?: string;
+  tags?: string[];
 };
 
 export type MemoryActionUpdate = {
@@ -90,7 +94,19 @@ function rowToMemory(row: Record<string, unknown>): Memory {
     updated_at: row['updated_at'] as string,
     superseded_by: (row['superseded_by'] as string) ?? null,
     hit_count: row['hit_count'] as number,
+    scope: (row['scope'] as string) ?? 'project',
+    tags: parseTags(row['tags']),
   };
+}
+
+function parseTags(raw: unknown): string[] {
+  if (typeof raw !== 'string' || raw.length === 0) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 // ─── Query Functions ────────────────────────────────────────────────────────
@@ -173,6 +189,8 @@ export function createMemory(fields: {
   confidence?: number;
   source_unit_type?: string;
   source_unit_id?: string;
+  scope?: string;
+  tags?: string[];
 }): string | null {
   if (!isDbAvailable()) return null;
   const adapter = _getAdapter();
@@ -191,6 +209,8 @@ export function createMemory(fields: {
       sourceUnitId: fields.source_unit_id ?? null,
       createdAt: now,
       updatedAt: now,
+      scope: fields.scope ?? 'project',
+      tags: fields.tags ?? [],
     });
     // Derive the real ID from the assigned seq (SELECT is still fine via adapter)
     const row = adapter.prepare('SELECT seq FROM memories WHERE id = :id').get({ ':id': placeholder });
@@ -354,6 +374,8 @@ export function applyMemoryActions(
               confidence: action.confidence,
               source_unit_type: unitType,
               source_unit_id: unitId,
+              scope: action.scope,
+              tags: action.tags,
             });
             break;
           case 'UPDATE':

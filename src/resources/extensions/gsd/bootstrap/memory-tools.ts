@@ -95,7 +95,8 @@ export function registerMemoryTools(pi: ExtensionAPI): void {
           { description: "Restrict results to a single category" },
         ),
       ),
-      scope: Type.Optional(Type.String({ description: "Scope filter (reserved for future use)" })),
+      scope: Type.Optional(Type.String({ description: "Only include memories with this scope (e.g. 'project', 'global')" })),
+      tag: Type.Optional(Type.String({ description: "Only include memories tagged with this value" })),
       include_superseded: Type.Optional(Type.Boolean({ description: "Include superseded memories (default false)" })),
       reinforce_hits: Type.Optional(
         Type.Boolean({ description: "Increment hit_count on returned memories (default false)" }),

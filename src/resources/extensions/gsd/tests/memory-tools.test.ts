@@ -151,6 +151,47 @@ test('memory-tools: memory_query filters by category', () => {
   closeDatabase();
 });
 
+test('memory-tools: memory_query filters by scope and tag', () => {
+  openDatabase(':memory:');
+  createMemory({ category: 'gotcha', content: 'shared fact', scope: 'project', tags: ['db', 'sqlite'] });
+  createMemory({ category: 'gotcha', content: 'global fact', scope: 'global', tags: ['db'] });
+  createMemory({ category: 'gotcha', content: 'other scope', scope: 'project', tags: ['net'] });
+
+  const projectScoped = executeMemoryQuery({ query: 'fact', scope: 'project' });
+  assert.ok(!projectScoped.isError);
+  const projectHits = projectScoped.details.hits as Array<{ id: string }>;
+  assert.equal(projectHits.length, 1);
+  assert.equal(projectHits[0].id, 'MEM001');
+
+  const tagged = executeMemoryQuery({ query: 'fact', tag: 'sqlite' });
+  assert.ok(!tagged.isError);
+  const taggedHits = tagged.details.hits as Array<{ id: string }>;
+  assert.equal(taggedHits.length, 1);
+  assert.equal(taggedHits[0].id, 'MEM001');
+
+  closeDatabase();
+});
+
+test('memory-tools: capture_thought stores scope and tags', () => {
+  openDatabase(':memory:');
+  const result = executeMemoryCapture({
+    category: 'architecture',
+    content: 'use WAL journaling by default',
+    scope: 'global',
+    tags: ['sqlite', 'wal'],
+  });
+  assert.ok(!result.isError);
+  assert.equal(result.details.scope, 'global');
+  assert.deepEqual(result.details.tags, ['sqlite', 'wal']);
+
+  const lookup = executeMemoryQuery({ query: 'WAL', scope: 'global', tag: 'wal' });
+  const hits = lookup.details.hits as Array<{ id: string }>;
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].id, 'MEM001');
+
+  closeDatabase();
+});
+
 test('memory-tools: memory_query clamps k to the 1–50 range', () => {
   openDatabase(':memory:');
   for (let i = 0; i < 10; i++) {
