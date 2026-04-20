@@ -67,11 +67,12 @@ function openRawSqliteForTest(dbPath: string): { exec(sql: string): void; close(
     const mod = _require('node:sqlite') as { DatabaseSync: new (path: string) => { exec(sql: string): void; close(): void } };
     return new mod.DatabaseSync(dbPath);
   } catch {
+    type SqliteCtor = new (path: string) => { exec(sql: string): void; close(): void };
     const mod = _require('better-sqlite3') as
-      | ((path: string) => { exec(sql: string): void; close(): void })
-      | { default: new (path: string) => { exec(sql: string): void; close(): void } };
-    const Database = typeof mod === 'function' ? mod : mod.default;
-    return new Database(dbPath);
+      | SqliteCtor
+      | { default: SqliteCtor };
+    const DatabaseCtor: SqliteCtor = typeof mod === 'function' ? mod : mod.default;
+    return new DatabaseCtor(dbPath);
   }
 }
 
