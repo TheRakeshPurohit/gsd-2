@@ -225,6 +225,41 @@ export function registerHooks(
     }));
   });
 
+  // Context-mode snapshot: write .gsd/last-snapshot.md before compaction so
+  // agents can call gsd_resume (or Read the file) to re-orient. Opt-in via
+  // preferences.context_mode.enabled. Runs after the auto-cancel handler
+  // above — if that one returned cancel:true, pi still fires us but the
+  // compaction won't actually happen; the snapshot is still useful then,
+  // since auto may pause and resume later.
+  pi.on("session_before_compact", async () => {
+    try {
+      const { loadEffectiveGSDPreferences } = await import("../preferences.js");
+      const prefs = loadEffectiveGSDPreferences();
+      if (prefs?.preferences.context_mode?.enabled !== true) return;
+      const { writeCompactionSnapshot } = await import("../compaction-snapshot.js");
+      const { ensureDbOpen } = await import("./dynamic-tools.js");
+      await ensureDbOpen();
+      const basePath = process.cwd();
+      let activeContext: string | null = null;
+      try {
+        const state = await deriveState(basePath);
+        if (state.activeMilestone && state.activeSlice && state.activeTask) {
+          activeContext =
+            `Active: ${state.activeMilestone.id} / ${state.activeSlice.id} / ${state.activeTask.id}` +
+            (state.activeTask.title ? ` — ${state.activeTask.title}` : "");
+        }
+      } catch {
+        /* non-fatal */
+      }
+      writeCompactionSnapshot(basePath, { activeContext });
+    } catch (err) {
+      safetyLogWarning(
+        "context-mode",
+        `failed to write compaction snapshot: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  });
+
   pi.on("session_shutdown", async (_event, ctx: ExtensionContext) => {
     if (isParallelActive()) {
       try {

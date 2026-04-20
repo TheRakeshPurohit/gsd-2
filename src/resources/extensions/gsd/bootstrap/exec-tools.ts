@@ -7,6 +7,8 @@ import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@gsd/pi-coding-agent";
 
 import { executeGsdExec } from "../tools/exec-tool.js";
+import { executeExecSearch } from "../tools/exec-search-tool.js";
+import { executeResume } from "../tools/resume-tool.js";
 import { loadEffectiveGSDPreferences } from "../preferences.js";
 import { logWarning } from "../workflow-logger.js";
 
@@ -52,6 +54,54 @@ export function registerExecTools(pi: ExtensionAPI): void {
       return executeGsdExec(params as Parameters<typeof executeGsdExec>[0], {
         baseDir: process.cwd(),
         preferences: prefs?.preferences ?? null,
+      });
+    },
+  });
+
+  pi.registerTool({
+    name: "gsd_exec_search",
+    label: "Search gsd_exec History",
+    description:
+      "List prior gsd_exec runs (most recent first) from .gsd/exec/*.meta.json. Useful for " +
+      "rediscovering the stdout_path of an earlier run without re-executing it. Read-only.",
+    promptSnippet: "Search prior gsd_exec runs by substring, runtime, or failing-only filter",
+    promptGuidelines: [
+      "Use this before re-running an expensive analysis — the prior run's stdout file may still answer.",
+      "The preview shows the trailing ~300 chars of stdout; read stdout_path for the full transcript.",
+    ],
+    parameters: Type.Object({
+      query: Type.Optional(Type.String({ description: "Substring matched against id and purpose (case-insensitive)." })),
+      runtime: Type.Optional(
+        Type.Union([Type.Literal("bash"), Type.Literal("node"), Type.Literal("python")], {
+          description: "Restrict to one runtime.",
+        }),
+      ),
+      failing_only: Type.Optional(Type.Boolean({ description: "Only non-zero exit codes and timeouts." })),
+      limit: Type.Optional(Type.Number({ description: "Max results (default 20, cap 200)", minimum: 1, maximum: 200 })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      return executeExecSearch(params as Parameters<typeof executeExecSearch>[0], {
+        baseDir: process.cwd(),
+      });
+    },
+  });
+
+  pi.registerTool({
+    name: "gsd_resume",
+    label: "Resume (Read Snapshot)",
+    description:
+      "Return the contents of .gsd/last-snapshot.md — a ≤2 KB digest of top memories, recent " +
+      "gsd_exec runs, and active context, written automatically on session_before_compact. Use " +
+      "this after compaction or session resume to re-orient quickly.",
+    promptSnippet: "Read the pre-compaction snapshot to re-orient after context loss",
+    promptGuidelines: [
+      "Call this right after a session resumes if you feel you've lost durable context.",
+      "The snapshot is a summary — use memory_query or gsd_exec_search for detail.",
+    ],
+    parameters: Type.Object({}),
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      return executeResume(params as Parameters<typeof executeResume>[0], {
+        baseDir: process.cwd(),
       });
     },
   });

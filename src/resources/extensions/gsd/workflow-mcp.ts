@@ -24,6 +24,8 @@ const MCP_WORKFLOW_TOOL_SURFACE = new Set([
   "ask_user_questions",
   "gsd_decision_save",
   "gsd_exec",
+  "gsd_exec_search",
+  "gsd_resume",
   "gsd_complete_milestone",
   "gsd_complete_task",
   "gsd_complete_slice",
