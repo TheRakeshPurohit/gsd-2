@@ -490,6 +490,14 @@ export async function handleWorkflowCommand(trimmed: string, ctx: ExtensionComma
   }
 
   if (trimmed === "queue") {
+    if (isAutoActive()) {
+      ctx.ui.notify(
+        "/gsd queue cannot run while auto-mode is active.\n" +
+        "Stop auto-mode first with /gsd stop, then run /gsd queue.",
+        "error",
+      );
+      return true;
+    }
     await showQueue(ctx, pi, projectRoot());
     return true;
   }
