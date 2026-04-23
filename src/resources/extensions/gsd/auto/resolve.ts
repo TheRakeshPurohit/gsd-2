@@ -69,6 +69,24 @@ export function isSessionSwitchInFlight(): boolean {
   return _sessionSwitchInFlight;
 }
 
+// ─── bumpAndResolveSynthetic ────────────────────────────────────────────────
+
+/**
+ * Bump the turn epoch and synthetically resolve the pending unit promise —
+ * the exact sequence timeout recovery must perform when it advances past a
+ * timed-out unit. Using this helper enforces the invariant "bump iff we are
+ * actually superseding the turn" so a future caller cannot resolve without
+ * bumping (orphaned writes leak) or bump without resolving (next turn starts
+ * already stale).
+ *
+ * NOT to be used for steering retries that keep the same turn alive — those
+ * do not supersede the turn and must not bump.
+ */
+export function bumpAndResolveSynthetic(reason: string): void {
+  bumpTurnGeneration(reason);
+  resolveAgentEnd({ messages: [], _synthetic: reason } as unknown as AgentEndEvent);
+}
+
 // ─── resolveAgentEndCancelled ─────────────────────────────────────────────────
 
 /**

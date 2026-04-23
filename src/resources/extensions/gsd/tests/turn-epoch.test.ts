@@ -94,3 +94,69 @@ test("turn-epoch: AsyncLocalStorage propagates across awaits", async () => {
     assert.equal(isStaleWrite("post-await"), true);
   });
 });
+
+// ─── Source-level invariant checks for recoverTimedOutUnit ──────────────────
+//
+// The recoverTimedOutUnit function has two branch families:
+// - ADVANCE branches: the unit is done, loop moves on — these MUST bump.
+// - STEERING branches: the same LLM turn is kept alive with a steering
+//   message — these MUST NOT bump (otherwise the retry's legitimate writes
+//   get marked stale).
+//
+// The whole function must contain zero raw `resolveAgentEnd` calls with the
+// "timeout-recovery" _synthetic marker — all advance paths go through
+// bumpAndResolveSynthetic. And there must be no top-level bump call.
+
+test("recoverTimedOutUnit: no raw `resolveAgentEnd({ _synthetic: \"timeout-recovery\" })` calls remain", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const src = fs.readFileSync(
+    path.join(here, "..", "auto-timeout-recovery.ts"),
+    "utf-8",
+  );
+  const rawSyntheticResolve =
+    /resolveAgentEnd\s*\(\s*\{\s*messages:\s*\[\s*\]\s*,\s*_synthetic:\s*["']timeout-recovery/;
+  assert.equal(
+    rawSyntheticResolve.test(src),
+    false,
+    "auto-timeout-recovery.ts must funnel advance paths through bumpAndResolveSynthetic — a raw resolveAgentEnd with _synthetic:\"timeout-recovery\" would leak orphan writes",
+  );
+});
+
+test("recoverTimedOutUnit: no top-level bumpTurnGeneration — steering branches must not supersede", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const src = fs.readFileSync(
+    path.join(here, "..", "auto-timeout-recovery.ts"),
+    "utf-8",
+  );
+  // The only bump surface allowed is via bumpAndResolveSynthetic (advance
+  // paths) — a direct bumpTurnGeneration call in this file would bump even
+  // when the function later decides to take a steering retry branch.
+  assert.equal(
+    /\bbumpTurnGeneration\s*\(/.test(src),
+    false,
+    "auto-timeout-recovery.ts must not call bumpTurnGeneration directly — use bumpAndResolveSynthetic so bump and supersede are atomic and tied to advance-only branches",
+  );
+});
+
+test("recoverTimedOutUnit: bumpAndResolveSynthetic appears exactly four times (one per advance branch)", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const src = fs.readFileSync(
+    path.join(here, "..", "auto-timeout-recovery.ts"),
+    "utf-8",
+  );
+  const matches = src.match(/bumpAndResolveSynthetic\s*\(/g) ?? [];
+  assert.equal(
+    matches.length,
+    4,
+    `expected 4 advance-branch supersede sites (durableComplete, execute-task-exhausted, artifact-already-exists, non-execute-exhausted); found ${matches.length}`,
+  );
+});
