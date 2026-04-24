@@ -59,6 +59,7 @@ import {
 import { resolveModelWithFallbacksForUnit } from "./preferences-models.js";
 import { resolveUokFlags } from "./uok/flags.js";
 import { selectReactiveDispatchBatch } from "./uok/execution-graph.js";
+import { getMilestonePipelineVariant } from "./milestone-scope-classifier.js";
 import { EXECUTION_ENTRY_PHASES, hasFinalizedMilestoneContext } from "./uok/plan-v2.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────
@@ -498,6 +499,11 @@ export const DISPATCH_RULES: DispatchRule[] = [
     match: async ({ state, mid, midTitle, basePath, prefs }) => {
       if (state.phase !== "planning") return null;
       if (prefs?.phases?.skip_research || prefs?.phases?.skip_slice_research) return null;
+      // #4781 phase 2: trivial-scope milestones skip dedicated slice research.
+      // plan-slice absorbs the lightweight discovery a trivial deliverable
+      // needs. Null result (DB unavailable / unknown) falls through to today's
+      // behavior.
+      if (await getMilestonePipelineVariant(mid) === "trivial") return null;
 
       // Load roadmap to find all slices
       const roadmapFile = resolveMilestoneFile(basePath, mid, "ROADMAP");
@@ -554,6 +560,8 @@ export const DISPATCH_RULES: DispatchRule[] = [
       // Phase skip: skip research when preference or profile says so
       if (prefs?.phases?.skip_research || prefs?.phases?.skip_slice_research)
         return null;
+      // #4781 phase 2: trivial-scope milestones skip dedicated slice research.
+      if (await getMilestonePipelineVariant(mid) === "trivial") return null;
       if (!state.activeSlice) return missingSliceStop(mid, state.phase);
       const sid = state.activeSlice!.id;
       const sTitle = state.activeSlice!.title;
@@ -906,8 +914,13 @@ export const DISPATCH_RULES: DispatchRule[] = [
         };
       }
 
-      // Skip preference: write a minimal pass-through VALIDATION file
-      if (prefs?.phases?.skip_milestone_validation) {
+      // #4781 phase 2: trivial-scope milestones skip the dedicated validate
+      // unit — complete-milestone's own verification steps (3/4/5 in the
+      // closer prompt) are sufficient proof for contained deliverables.
+      const trivialVariant = await getMilestonePipelineVariant(mid) === "trivial";
+
+      // Skip preference OR trivial scope: write a minimal pass-through VALIDATION file.
+      if (prefs?.phases?.skip_milestone_validation || trivialVariant) {
         const mDir = resolveMilestonePath(basePath, mid);
         if (mDir) {
           if (!existsSync(mDir)) mkdirSync(mDir, { recursive: true });
@@ -915,15 +928,18 @@ export const DISPATCH_RULES: DispatchRule[] = [
             mDir,
             buildMilestoneFileName(mid, "VALIDATION"),
           );
+          const skipSource = trivialVariant
+            ? "trivial-scope pipeline variant (#4781)"
+            : "`skip_milestone_validation` preference";
           const content = [
             "---",
             "verdict: pass",
             "remediation_round: 0",
             "---",
             "",
-            "# Milestone Validation (skipped by preference)",
+            "# Milestone Validation (skipped)",
             "",
-            "Milestone validation was skipped via `skip_milestone_validation` preference.",
+            `Milestone validation was skipped via ${skipSource}.`,
           ].join("\n");
           writeFileSync(validationPath, content, "utf-8");
         }

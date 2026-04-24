@@ -193,6 +193,59 @@ function mentionsBackend(haystack: string): boolean {
       || mentionsWithoutNegation(haystack, "endpoint");
 }
 
+// ─── DB adapter ───────────────────────────────────────────────────────────
+
+/**
+ * Shape adapter: convert a milestone DB row into the classifier input
+ * object. Keeps `milestone-scope-classifier.ts` free of DB types at the
+ * module boundary — callers can either use this helper or hand-build the
+ * input themselves (e.g. from plan-milestone tool params before insert).
+ */
+export function milestoneRowToScopeInput(row: {
+  title?: string;
+  vision?: string;
+  success_criteria?: string[];
+  key_risks?: Array<{ risk?: string; whyItMatters?: string }>;
+  definition_of_done?: string[];
+  requirement_coverage?: string;
+  verification_contract?: string;
+  verification_integration?: string;
+  verification_operational?: string;
+  verification_uat?: string;
+}): MilestoneScopeInput {
+  return {
+    title: row.title,
+    vision: row.vision,
+    successCriteria: row.success_criteria,
+    keyRisks: row.key_risks,
+    definitionOfDone: row.definition_of_done,
+    requirementCoverage: row.requirement_coverage,
+    verificationContract: row.verification_contract,
+    verificationIntegration: row.verification_integration,
+    verificationOperational: row.verification_operational,
+    verificationUat: row.verification_uat,
+  };
+}
+
+/**
+ * Compute the pipeline variant for a milestone by reading its planning
+ * fields from the DB and running the classifier. Returns `null` when
+ * classification is unavailable (DB closed, milestone missing, unexpected
+ * error) — callers MUST treat null as "run the full pipeline" so a
+ * classification failure never silently downshifts dispatch.
+ */
+export async function getMilestonePipelineVariant(mid: string): Promise<PipelineVariant | null> {
+  try {
+    const { isDbAvailable, getMilestone } = await import("./gsd-db.js");
+    if (!isDbAvailable()) return null;
+    const row = getMilestone(mid);
+    if (!row) return null;
+    return classifyMilestoneScope(milestoneRowToScopeInput(row)).variant;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────
 
 /**
