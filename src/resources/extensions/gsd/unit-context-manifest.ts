@@ -166,7 +166,9 @@ export const UNIT_MANIFESTS: Record<UnitType, UnitContextManifest> = {
     codebaseMap: true,
     preferences: "active-only",
     artifacts: {
-      inline: ["project", "requirements", "decisions", "templates"],
+      // Phase 3 migration (#4782): matches today's actual
+      // buildResearchMilestonePrompt inlining order.
+      inline: ["milestone-context", "project", "requirements", "decisions", "templates"],
       excerpt: [],
       onDemand: [],
     },

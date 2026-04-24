@@ -1229,30 +1229,64 @@ export async function buildDiscussMilestonePrompt(
 }
 
 export async function buildResearchMilestonePrompt(mid: string, midTitle: string, base: string): Promise<string> {
-  const contextPath = resolveMilestoneFile(base, mid, "CONTEXT");
-  const contextRel = relMilestoneFile(base, mid, "CONTEXT");
+  // #4782 phase 3: research-milestone migrated through the composer.
+  // Declared inline order: milestone-context, project, requirements,
+  // decisions, templates. Knowledge stays outside the composer
+  // (budget-driven, scoped by keyword extraction — future phase folds
+  // policy-driven blocks in).
+  const resolveArtifact: ArtifactResolver = async (key) => {
+    switch (key) {
+      case "milestone-context": {
+        const p = resolveMilestoneFile(base, mid, "CONTEXT");
+        const r = relMilestoneFile(base, mid, "CONTEXT");
+        return await inlineFile(p, r, "Milestone Context");
+      }
+      case "project":
+        return await inlineProjectFromDb(base);
+      case "requirements":
+        return await inlineRequirementsFromDb(base, mid);
+      case "decisions":
+        return await inlineDecisionsFromDb(base, mid);
+      case "templates":
+        return inlineTemplate("research", "Research");
+      default:
+        return null;
+    }
+  };
 
-  const inlined: string[] = [];
-  inlined.push(await inlineFile(contextPath, contextRel, "Milestone Context"));
-  const projectInline = await inlineProjectFromDb(base);
-  if (projectInline) inlined.push(projectInline);
-  const requirementsInline = await inlineRequirementsFromDb(base, mid);
-  if (requirementsInline) inlined.push(requirementsInline);
-  const decisionsInline = await inlineDecisionsFromDb(base, mid);
-  if (decisionsInline) inlined.push(decisionsInline);
-  // Scoped + budgeted — see issue #4719
+  const composed = await composeInlinedContext("research-milestone", resolveArtifact);
+
+  // Knowledge block stays outside the composer — budgeted, scoped via
+  // keyword extraction (#4719). Inserted between decisions and the
+  // templates block to match the pre-migration output order. We split
+  // the composer output around the templates section to preserve that
+  // ordering.
   const knowledgeInlineRM = await inlineKnowledgeBudgeted(base, extractKeywords(midTitle));
-  if (knowledgeInlineRM) inlined.push(knowledgeInlineRM);
-  inlined.push(inlineTemplate("research", "Research"));
+  const parts: string[] = [];
+  if (knowledgeInlineRM && composed) {
+    // Insert knowledge before the template block so the overall order is:
+    //   milestone-context → project → requirements → decisions → KNOWLEDGE → research template
+    const idx = composed.lastIndexOf("### Output Template:");
+    if (idx > 0) {
+      const before = composed.slice(0, idx).replace(/\n\n---\n\n$/, "");
+      const after = composed.slice(idx);
+      parts.push(before, knowledgeInlineRM, after);
+    } else {
+      parts.push(composed, knowledgeInlineRM);
+    }
+  } else if (composed) {
+    parts.push(composed);
+    if (knowledgeInlineRM) parts.push(knowledgeInlineRM);
+  }
 
-  const inlinedContext = capPreamble(`## Inlined Context (preloaded — do not re-read these files)\n\n${inlined.join("\n\n---\n\n")}`);
+  const inlinedContext = capPreamble(`## Inlined Context (preloaded — do not re-read these files)\n\n${parts.join("\n\n---\n\n")}`);
 
   const outputRelPath = relMilestoneFile(base, mid, "RESEARCH");
   return loadPrompt("research-milestone", {
     workingDirectory: base,
     milestoneId: mid, milestoneTitle: midTitle,
     milestonePath: relMilestonePath(base, mid),
-    contextPath: contextRel,
+    contextPath: relMilestoneFile(base, mid, "CONTEXT"),
     outputPath: join(base, outputRelPath),
     inlinedContext,
     skillActivation: buildSkillActivationBlock({
