@@ -184,17 +184,22 @@ async function runComputed(
   opts: ComposeUnitContextOptions,
 ): Promise<string[]> {
   if (ids.length === 0 || !opts.computed) return [];
+  // Type safety lives at the registration boundary (caller-supplied
+  // `computed` is typed against ComputedArtifactInputs[K] per id). Inside
+  // the composer we only dispatch — view the registry through a widened
+  // local shape so the loop compiles when the registry is empty (which
+  // it is in the v2-contract foundation PR before any computed ids are
+  // registered, making `keyof ComputedArtifactInputs` resolve to `never`).
+  type AnyEntry = {
+    build: (inputs: unknown, base: BaseResolverContext) => Promise<string | null>;
+    inputs: unknown;
+  };
+  const registry = opts.computed as Record<string, AnyEntry | undefined>;
   const out: string[] = [];
   for (const id of ids) {
-    const entry = opts.computed[id];
+    const entry = registry[id];
     if (!entry) continue;
-    // Each entry is { build, inputs } typed against ComputedArtifactInputs[K].
-    // Cast widens K → ComputedArtifactId for the dispatch; the registry's
-    // per-key types kept the call site honest.
-    const body = await (entry.build as (
-      i: unknown,
-      b: BaseResolverContext,
-    ) => Promise<string | null>)(entry.inputs, opts.base);
+    const body = await entry.build(entry.inputs, opts.base);
     if (body && body.length > 0) out.push(body);
   }
   return out;
