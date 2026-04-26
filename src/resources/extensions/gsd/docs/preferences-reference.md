@@ -193,6 +193,8 @@ Setting `prefer_skills: []` does **not** disable skill discovery — it just mea
   - `hooks`: boolean — enable routing hooks. Default: `true`.
   - `capability_routing`: boolean — enable capability-profile scoring for model selection within a tier. Requires `enabled: true`. Default: `false`.
 
+- `disabled_model_providers`: string[] — provider IDs to hide from model selection and routing (for example `["google-gemini-cli"]`). This only affects model availability (`/model`, auto-model selection, routing); it does not disable tool auth flows like `google_search`.
+
 - `uok`: Unified Orchestration Kernel controls. Keys:
   - `enabled`: boolean — enable kernel wrappers and contract observers. Default: `true`.
   - `legacy_fallback.enabled`: boolean — emergency release fallback that forces legacy orchestration behavior even when `uok.enabled` is `true`. Default: `false`.

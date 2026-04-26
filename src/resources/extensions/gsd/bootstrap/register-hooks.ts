@@ -42,6 +42,15 @@ async function syncServiceTierStatus(ctx: ExtensionContext): Promise<void> {
   ctx.ui.setStatus("gsd-fast", formatServiceTierFooterStatus(getEffectiveServiceTier(), ctx.model?.id));
 }
 
+async function applyDisabledModelProviderPolicy(ctx: ExtensionContext): Promise<void> {
+  try {
+    const { resolveDisabledModelProvidersFromPreferences } = await import("../preferences.js");
+    ctx.modelRegistry.setDisabledModelProviders(resolveDisabledModelProvidersFromPreferences());
+  } catch {
+    // Non-fatal: keep default provider visibility if preferences cannot be loaded.
+  }
+}
+
 export function registerHooks(
   pi: ExtensionAPI,
   ecosystemHandlers: GSDEcosystemBeforeAgentStartHandler[],
@@ -57,6 +66,7 @@ export function registerHooks(
     resetToolCallLoopGuard();
     resetAskUserQuestionsCache();
     await syncServiceTierStatus(ctx);
+    await applyDisabledModelProviderPolicy(ctx);
     // Skip MCP auto-prep when running inside an auto-worktree (see session_switch below).
     const { isInAutoWorktree } = await import("../auto-worktree.js");
     if (!isInAutoWorktree(process.cwd())) {
@@ -106,6 +116,7 @@ export function registerHooks(
     resetAskUserQuestionsCache();
     clearDiscussionFlowState();
     await syncServiceTierStatus(ctx);
+    await applyDisabledModelProviderPolicy(ctx);
     // Skip MCP auto-prep when running inside an auto-worktree. The worktree
     // already has .mcp.json from createAutoWorktree, and re-running the writer
     // post-chdir rewrites the file mid-run (non-idempotent due to cwd-relative
