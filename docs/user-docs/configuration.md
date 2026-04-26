@@ -163,6 +163,15 @@ Recommended verification order:
 | `GSD_ALLOWED_COMMAND_PREFIXES` | (built-in list) | Comma-separated command prefixes allowed for `!command` value resolution. Overrides `allowedCommandPrefixes` in settings.json. See [Custom Models — Command Allowlist](custom-models.md#command-allowlist). |
 | `GSD_FETCH_ALLOWED_URLS` | (none) | Comma-separated hostnames exempted from `fetch_page` URL blocking. Overrides `fetchAllowedUrls` in settings.json. See [URL Blocking](#url-blocking-fetch_page). |
 
+### Ollama
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL. A bare `host:port` value is treated as `http://host:port`. |
+| `OLLAMA_API_KEY` | (none) | Bearer token for remote or cloud Ollama endpoints. Local Ollama ignores this header. |
+| `OLLAMA_PROBE_TIMEOUT_MS` | `1500` | Startup health-check timeout in milliseconds. Unset, empty, non-numeric, zero, or negative values fall back to the default. Values above `2147483647` ms are capped to Node.js's maximum timer delay. |
+| `OLLAMA_REQUEST_TIMEOUT_MS` | `10000` | Per-request REST timeout in milliseconds. Unset, empty, non-numeric, zero, or negative values fall back to the default. Values above `2147483647` ms are capped to Node.js's maximum timer delay. |
+
 ## All Settings
 
 ### `models`

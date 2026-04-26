@@ -21,6 +21,7 @@ import { parseNDJsonStream } from "./ndjson-stream.js";
 const DEFAULT_HOST = "http://localhost:11434";
 const DEFAULT_PROBE_TIMEOUT_MS = 1500;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+export const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /**
  * Parse a positive integer from an environment variable, falling back to
@@ -35,7 +36,7 @@ export function envPositiveInt(name: string, fallback: number): number {
 	if (!raw) return fallback;
 	const parsed = Number.parseInt(raw, 10);
 	if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-	return parsed;
+	return Math.min(parsed, MAX_TIMER_DELAY_MS);
 }
 
 /**

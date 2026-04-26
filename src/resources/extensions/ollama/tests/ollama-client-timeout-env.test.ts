@@ -11,6 +11,7 @@ import {
 	envPositiveInt,
 	getProbeTimeoutMs,
 	getRequestTimeoutMs,
+	MAX_TIMER_DELAY_MS,
 } from "../ollama-client.js";
 
 const PROBE_VAR = "OLLAMA_PROBE_TIMEOUT_MS";
@@ -74,6 +75,12 @@ describe("envPositiveInt — defensive fallback", () => {
 	it("parses leading digits and discards trailing junk (parseInt semantics)", () => {
 		withEnv("__GSD_TEST_INT__", "1500ms", () => {
 			assert.equal(envPositiveInt("__GSD_TEST_INT__", 42), 1500);
+		});
+	});
+
+	it("caps values above Node's maximum timer delay", () => {
+		withEnv("__GSD_TEST_INT__", "9999999999999", () => {
+			assert.equal(envPositiveInt("__GSD_TEST_INT__", 42), MAX_TIMER_DELAY_MS);
 		});
 	});
 });
