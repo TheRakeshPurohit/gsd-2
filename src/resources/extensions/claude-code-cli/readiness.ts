@@ -65,7 +65,7 @@ function debugLog(...parts: unknown[]): void {
  * Find the first candidate that responds to `--version`. Returns the
  * candidate name on success, null if none worked.
  *
- * On Windows with `shell: true`, a missing candidate surfaces as a
+ * On Windows with `cmd /c`, a missing candidate surfaces as a
  * non-zero exit from cmd.exe rather than ENOENT — so we cannot rely on
  * the error code to decide "try next". Treat any failure as "try next"
  * for the version probe; the only thing that matters for binary
