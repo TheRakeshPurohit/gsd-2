@@ -28,7 +28,7 @@ This unit runs under the `planning-dispatch` tools-policy: you may use the `suba
 - **Touched auth, network, parsing, file IO, shell exec, or crypto** → dispatch the **security** agent for an OWASP-style audit.
 - **Added or modified tests** → dispatch the **tester** agent to assess coverage gaps relative to the slice plan.
 
-Subagents read the diff and report findings — they do **not** write user source. You remain responsible for acting on their feedback before calling `gsd_complete_slice`.
+Subagents read the diff and report findings — they do **not** write user source. You remain responsible for acting on their feedback before calling `gsd_complete_slice` with `milestoneId` and `sliceId`.
 
 Then:
 1. Use the **Slice Summary** and **UAT** output templates from the inlined context above

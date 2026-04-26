@@ -874,7 +874,7 @@ export function buildSkillActivationBlock(params: {
   // auto-matched skills (the recommendations block still surfaces manifest
   // skills passively); only "auto" actually adds them to the activation
   // directive set. Default `skill_discovery` is "suggest", so this is opt-in.
-  if (resolveSkillDiscoveryMode(params.base) === "auto") {
+  if ((prefs?.skill_discovery ?? "suggest") === "auto") {
     const manifestAllow = resolveSkillManifest(params.unitType);
     const allowSet = manifestAllow ? new Set(manifestAllow) : null;
     for (const skill of visibleSkills) {
