@@ -4,7 +4,7 @@ import { basename, dirname, join } from "node:path";
 import type { DoctorIssue, DoctorIssueCode } from "./doctor-types.js";
 import { cleanNumberedGsdVariants } from "./repo-identity.js";
 import { milestonesDir, gsdRoot, resolveGsdRootFile } from "./paths.js";
-import { deriveState, isReusableGhostMilestone } from "./state.js";
+import { deriveState, isGhostMilestone, isReusableGhostMilestone } from "./state.js";
 import { saveFile } from "./files.js";
 import { nativeIsRepo, nativeForEachRef, nativeUpdateRef } from "./native-git-bridge.js";
 import { readCrashLock, isLockProcessAlive, clearLock } from "./crash-recovery.js";
@@ -602,8 +602,11 @@ export async function checkRuntimeHealth(
   // for a phantom forward-reference. Surface as a fixable warning.
   try {
     const milestoneIds = findMilestoneIds(basePath);
+    const hasDbFile = existsSync(join(root, "gsd.db"));
     for (const mid of milestoneIds) {
-      if (isReusableGhostMilestone(basePath, mid)) {
+      const isOrphan = isReusableGhostMilestone(basePath, mid)
+        || (!hasDbFile && isGhostMilestone(basePath, mid));
+      if (isOrphan) {
         issues.push({
           severity: "warning",
           code: "orphan_milestone_dir",
