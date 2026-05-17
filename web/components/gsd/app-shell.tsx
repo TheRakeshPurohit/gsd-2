@@ -593,30 +593,29 @@ function ProjectAwareWorkspace() {
   const activeStore = activeProjectCwd ? manager.getActiveStore() : null
 
   // Auto-select the launch project when `gsd --web` was started from a project
-  // directory. Guarded by a ref so React's StrictMode double-invoke cannot
-  // trigger two parallel switchProject calls.
+  // directory. The ref is set only after a fetch completes, so StrictMode's
+  // setup → cleanup → setup cycle (first attempt aborted by cleanup) does not
+  // leave the auto-select stranded.
   const launchCwdFetched = useRef(false)
   useEffect(() => {
     if (launchCwdFetched.current) return
     if (manager.getActiveProjectCwd()) return
-    launchCwdFetched.current = true
-    let cancelled = false
+    const controller = new AbortController()
     void (async () => {
       try {
-        const res = await authFetch("/api/preferences")
+        const res = await authFetch("/api/preferences", { signal: controller.signal })
         if (!res.ok) return
         const prefs = (await res.json()) as { launchCwd?: string | null }
-        if (cancelled) return
+        launchCwdFetched.current = true
         if (prefs.launchCwd && !manager.getActiveProjectCwd()) {
           manager.switchProject(prefs.launchCwd)
         }
-      } catch {
-        // Ignore — user can still pick from the gate.
+      } catch (err) {
+        if ((err as { name?: string }).name === "AbortError") return
+        // Ignore other errors — user can still pick from the gate.
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => controller.abort()
   }, [manager])
 
   // Shut down all projects when the tab actually closes.

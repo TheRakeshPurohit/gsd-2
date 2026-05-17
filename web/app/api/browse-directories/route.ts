@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { homedir, platform, userInfo } from "node:os";
-import { isAllowedBrowsePath, getAdditionalRoots } from "../../../lib/browse-scope";
+import { isAllowedBrowsePath, getAdditionalRoots } from "../../../lib/browse-scope.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +15,15 @@ function currentUsername(): string | undefined {
     return userInfo().username || undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Resolve symlinks if the path exists; otherwise fall back to a lexical resolve. */
+function safeRealpath(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
   }
 }
 
@@ -56,13 +65,6 @@ export async function GET(request: Request): Promise<Response> {
     const additionalRoots = getAdditionalRoots(platform(), existsSync, currentUsername());
     const targetPath = rawPath ? resolve(rawPath) : devRoot;
 
-    if (!isAllowedBrowsePath(targetPath, { devRoot, home, additionalRoots })) {
-      return Response.json(
-        { error: "Path outside allowed scope" },
-        { status: 403 },
-      );
-    }
-
     if (!existsSync(targetPath)) {
       return Response.json(
         { error: `Path does not exist: ${targetPath}` },
@@ -70,27 +72,43 @@ export async function GET(request: Request): Promise<Response> {
       );
     }
 
-    const stat = statSync(targetPath);
+    // Resolve symlinks before enforcing scope so an in-scope symlink that
+    // points outside the allowed roots cannot escape the picker. Compare
+    // canonical-against-canonical for both target and roots.
+    const canonical = safeRealpath(targetPath);
+    const canonicalOpts = {
+      devRoot: safeRealpath(devRoot),
+      home: safeRealpath(home),
+      additionalRoots: additionalRoots.map(safeRealpath),
+    };
+    if (!isAllowedBrowsePath(canonical, canonicalOpts)) {
+      return Response.json(
+        { error: "Path outside allowed scope" },
+        { status: 403 },
+      );
+    }
+
+    const stat = statSync(canonical);
     if (!stat.isDirectory()) {
       return Response.json(
-        { error: `Not a directory: ${targetPath}` },
+        { error: `Not a directory: ${canonical}` },
         { status: 400 },
       );
     }
 
-    const parentPath = dirname(targetPath);
+    const parentPath = dirname(canonical);
     const parentAllowed =
-      parentPath !== targetPath &&
-      isAllowedBrowsePath(parentPath, { devRoot, home, additionalRoots });
+      parentPath !== canonical &&
+      isAllowedBrowsePath(parentPath, canonicalOpts);
 
     // Surface mount roots / drive letters as quick-access when browsing $HOME or devRoot.
     const showAdditionalRoots =
-      additionalRoots.length > 0 && (targetPath === home || targetPath === devRoot);
+      additionalRoots.length > 0 && (canonical === canonicalOpts.home || canonical === canonicalOpts.devRoot);
 
     const entries: Array<{ name: string; path: string }> = [];
 
     try {
-      const items = readdirSync(targetPath, { withFileTypes: true });
+      const items = readdirSync(canonical, { withFileTypes: true });
       for (const item of items) {
         if (!item.isDirectory()) continue;
         if (item.name.startsWith(".")) continue;
@@ -98,7 +116,7 @@ export async function GET(request: Request): Promise<Response> {
 
         entries.push({
           name: item.name,
-          path: resolve(targetPath, item.name),
+          path: resolve(canonical, item.name),
         });
       }
 
@@ -118,7 +136,7 @@ export async function GET(request: Request): Promise<Response> {
     entries.sort((a, b) => a.name.localeCompare(b.name));
 
     return Response.json({
-      current: targetPath,
+      current: canonical,
       parent: parentAllowed ? parentPath : null,
       entries,
     });
