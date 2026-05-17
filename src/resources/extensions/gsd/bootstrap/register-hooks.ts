@@ -168,6 +168,15 @@ function isGsdManagedTool(name: string): boolean {
   return name.startsWith("gsd_") || name === "memory_query" || name === "capture_thought" || name === "gsd_graph";
 }
 
+/**
+ * Resolves requested tool names against active tools using exact and MCP-scoped matches.
+ *
+ * MCP-scoped names follow `mcp__<namespace>__<toolname>`.
+ * Example: if `requestedToolNames` contains `gsd_exec` and `activeToolNames` contains
+ * `mcp__gsd-workflow__gsd_exec`, the MCP-scoped active name is included in the result.
+ *
+ * Returns deduplicated active tool names that satisfy the requested base names.
+ */
 function resolveScopedToolNames(
   activeToolNames: readonly string[],
   requestedToolNames: readonly string[],

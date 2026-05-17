@@ -158,6 +158,9 @@ test("buildMinimalAutoGsdToolSet preserves workflow MCP-namespaced closeout tool
   assert.ok(result.includes("mcp__gsd-workflow__gsd_replan_slice"));
   assert.ok(result.includes("mcp__gsd-workflow__gsd_slice_complete"));
   assert.ok(!result.includes("mcp__gsd-workflow__gsd_complete_slice"));
+  assert.ok(result.includes("mcp__gsd-workflow__gsd_exec"));
+  assert.ok(result.includes("mcp__gsd-workflow__memory_query"));
+  assert.ok(result.includes("mcp__gsd-workflow__capture_thought"));
 });
 
 test("buildMinimalAutoGsdToolSet covers execute-task-simple", () => {
