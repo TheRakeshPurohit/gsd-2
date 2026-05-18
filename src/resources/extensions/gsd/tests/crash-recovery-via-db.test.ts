@@ -299,8 +299,8 @@ test("clearStaleWorkerLock crashes stale worker and cancels latest active dispat
   assert.equal(dispatch!.status, "canceled");
   assert.equal(dispatch!.exit_reason, "crash-recovered");
   const leaseRow = _getAdapter()!.prepare(
-    `SELECT status FROM milestone_leases WHERE milestone_id = :m`,
-  ).get({ ":m": "M001" }) as { status: string } | undefined;
+    `SELECT status FROM milestone_leases WHERE fencing_token = :ft`,
+  ).get({ ":ft": lease.token }) as { status: string } | undefined;
   assert.equal(leaseRow?.status, "released");
   assert.equal(getRuntimeKv("worker", workerId, "session_file"), null);
   assert.equal(readCrashLock(base), null);
@@ -325,7 +325,7 @@ test("clearLock marks stale worker crashed and releases held milestone lease", (
 
   assert.equal(getAutoWorker(workerId)?.status, "crashed");
   const leaseRow = _getAdapter()!.prepare(
-    `SELECT status FROM milestone_leases WHERE milestone_id = :m`,
-  ).get({ ":m": "M001" }) as { status: string } | undefined;
+    `SELECT status FROM milestone_leases WHERE fencing_token = :ft`,
+  ).get({ ":ft": lease.token }) as { status: string } | undefined;
   assert.equal(leaseRow?.status, "released");
 });
